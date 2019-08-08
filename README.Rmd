@@ -22,3 +22,9 @@ A project containing work related to the quantitative project using neural netwo
 * Know where other players are based on subject player
 * Track other players
 * Define error metric
+* Predict Locations for 1 game
+* . 
+* .
+* . 
+* Neural Networks
+
