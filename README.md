@@ -16,3 +16,6 @@ neural networks for self localisation in simulated soccer matches.
   - Know where other players are based on subject player
   - Track other players
   - Define error metric
+  - Predict Locations for 1 game
+  - .
+  - . \# . \# Neural Networks
