@@ -43,6 +43,7 @@ read_moving <- function(team, player) {
 #' @examples
 #' read_landmarks("Gliders", 2)
 read_landmarks <- function(team, player) {
+  
   all_files <- fs::dir_ls(here::here("data-raw", "Z-example-csv")) 
   
   all_files %>% 
@@ -69,3 +70,4 @@ read_ground_truth <- function() {
     readr::read_csv() %>% 
     janitor::clean_names()
 }
+

@@ -7,24 +7,99 @@ output: pdf_document
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+source(here::here("read-utils.R"))
+source(here::here("self_localisation.R"))
 ```
 
-## R Markdown
-
-This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
-
-When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
-
-```{r cars}
-summary(cars)
+```{r}
+flags <- read_csv(here::here("data-raw", "landmarks.csv"))
 ```
 
-## Including Plots
 
-You can also embed plots, for example:
-
-```{r pressure, echo=FALSE}
-plot(pressure)
+```{r}
+landmarks_1 <- read_landmarks("HELIOS", 2)
 ```
 
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+```{r}
+one_time_first <- landmarks_1 %>% 
+  # filter(number_time != 0) %>%
+  slice(1)
+  
+a <- one_time_first %>% 
+  select_if(naniar::all_complete) %>% 
+  pivot_longer(-number_time, names_to  = "landmark") %>% 
+  separate(landmark, sep = "_(?=[a-z]{2,})", into = c("landmark", "metric")) %>% 
+  filter(metric %in% c("dist", "angle")) %>% 
+  pivot_wider(names_from = metric, values_from = value) %>% 
+  select(-number_time) 
+
+b <- a %>% 
+  left_join(flags) %>% 
+  arrange(dist)
+
+
+```
+
+
+
+```{r}
+b <- a %>% 
+  left_join(flags) %>% 
+  arrange(dist)
+```
+
+```{r}
+flag_1 <- slice(b, 1)
+flag_2 <- slice(b, 2)
+get_position(l1_angle = flag_1$angle, l1_dist = flag_1$dist, l2_angle = flag_2$angle, l2_dist = flag_2$dist, l1 = c(flag_1$x, flag_1$y), l2 = c(flag_2$x, flag_2$y))
+```
+
+
+
+
+
+
+```{r}
+landmarks_1 %>% 
+  pivot_longer(cols = c(starts_with("f_"), starts_with("g_"), starts_with("l_"))) %>% 
+  filter(is.nan(value) == FALSE)
+```
+
+
+
+
+```{r}
+flag_1 <- b %>% 
+  slice(1)
+flag_2 <- b %>% 
+  slice(2)
+flag_3<- b %>% 
+  slice(3)
+
+angle_one_two <-
+  abs(flag_1$angle - flag_2$angle) * pi/180
+
+angle_one_three <-
+  abs(flag_1$angle - flag_3$angle) *pi /180
+
+angle_two_three <-
+  abs(flag_2$angle - flag_3$angle) *pi /180
+
+
+library(triangulation)
+
+triangulation::determine_position(A = c(flag_1$x, flag_1$y), B = c(flag_2$x, flag_2$y), C = c(flag_3$x, flag_3$y), observer_angle_AB = angle_one_two,
+observer_angle_AC = angle_one_three, observer_angle_BC = angle_two_three, lines_in_plot = TRUE)
+
+
+triangulation::determine_region(A = c(flag_1$x, flag_1$y), B = c(flag_2$x, flag_2$y), C = c(flag_3$x, flag_3$y), observer_angle_AB = angle_one_two,
+observer_angle_AC = angle_one_three, lines_in_plot = TRUE)
+```
+
+
+Reverse engineer this code
+```{r}
+triangulation::determine_position
+```
+
