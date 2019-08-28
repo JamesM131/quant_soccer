@@ -2,7 +2,7 @@
 title: "Neural Networks for Self Localisation"
 subtitle: "James Monks and Nathan Villalobos  <html><div style='float:left'></div><hr color='#EB811B' size=1px width=796px></html>"
 author: "Supervisor: Oliver Obst"
-institute: "Western Sydney University"
+institute: "Western Sydney University: 200045 Quantitative Project"
 output:
   xaringan::moon_reader:
     lib_dir: libs
@@ -194,8 +194,7 @@ The bearing of the player from a flag can be found.
 
 ---
 # Mathematical Localisation
-Image showing angles and distances. 
-
+![triangle](Presentation_Assets/triangle.png)
 
 ---
 class: inverse, center, middle
