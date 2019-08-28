@@ -39,7 +39,7 @@ The first thing that is important to understand is what RoboCup is.
 * To achieve this, the goal to beat the 2050 world cup football champions with robots was set
 
 
-* Modelled on similar successful endevours, such as IMB beating the chess world chmpion
+* Modelled on similar successful endevours, such as IMB beating the chess world champion
 
 * Since 1997 a competition has been held every year, with increasingly more powerful technology
 
