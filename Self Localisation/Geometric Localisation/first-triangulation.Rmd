@@ -8,8 +8,8 @@ output: pdf_document
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 library(tidyverse)
-source(here::here("read-utils.R"))
-source(here::here("self_localisation.R"))
+source(here::here("R", "read-utils.R"))
+source(here::here("Self Localisation", "Geometric Localisation", "geometric_self_localisation.R"))
 ```
 
 ```{r}
