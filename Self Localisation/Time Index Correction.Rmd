@@ -1,0 +1,142 @@
+---
+title: "Correction of the Perceived Time Index"
+author: "James Monks"
+date: "10/09/2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+The groundtruth data and the percieved data are connected through the variable `number_time`. This time index progresses steadily progresses by one for each row in most cases. The time index for the perceived data is updated with a frequency that is dependant on the field of view. This is okay for connecting the data sets however as the index for the perceived data increases proportionally to the update frequency. (e.g. if update frequency is evry two iterations, the perceived time index will increase by two for each row).
+
+An issue arises when the playmode is set to "foul_charge", as the time index stalls for each iteration despite the players still moving around. This is akin to the clock stopping in a football match to prevent time running down during penalties or other fouls. This is important, as it prevents the strategy of causing lots of fouls to run out the clock when a team is ahead, however it poses an analytical challenge. The time indexes will not line up between groundtruth and the perceived data in these periods due to the update frequencies.
+
+## Ground Truth Index
+It is trivial to calculate the adjusted time index for the ground truth data, as the only issue is stalling time progression during "foul_charge" playmode. This means that the row number can be used as a time index.
+```{r}
+read_ground_truth() %>% 
+  rownames_to_column("time_index")
+```
+
+
+## Perceived Data
+It is more difficult to obtain the adjusted time index for the perceived data. This is because the update frequency for this period of stalled time is not known. The field of view is needed to know the exact update frequency, however, this variable is not in the perceived data. It can be estimated based on the update frequency that is observed before the stalled time, however, this is based on the flawed assumption that there will never be a change in update frequency in the middle of the stalled time. 
+
+It would be better to take the ground truth at the time of the foul and generate the corresponding time progression for the perceived time index. This is possible as the ground truth data contains the field of view, which is related to update frequency.
+
+### Relationship Between FOV and Update Frequency
+The relationship can be found by connecting the ground truth field of view information to the perceived data. If the perceived data set is grouped by field of view, and then the difference between the time index and the lag of the time index is obtained, then the update frequency for each field of view can be found. 
+
+```{r}
+view_width_2 <- read_ground_truth() %>% 
+  select(number_time, l2_vieww)
+
+observed_2 <- read_landmarks("Gliders", 2) %>% 
+  select(number_time) %>% 
+  filter(number_time != 0)
+
+
+observed_2 %>% 
+  left_join(view_width_2) %>% 
+  mutate(
+    number_time_lag = lag(number_time), 
+    view_lead = lead(l2_vieww)
+  ) %>% 
+  mutate(frequency = number_time - number_time_lag) %>% 
+  filter(frequency != 0) %>% 
+  filter(is.na(l2_vieww) == FALSE) %>% 
+  group_by(l2_vieww) %>%
+  summarise(frequency = mean(frequency, na.rm = TRUE))
+```
+
+It can be seen here that the update frequency is 1 at view width of 60, 2 at view width of 120 and and 3 at a view width of 180. A slight error is introduced due to transitional periods, however the pattern is clear.
+
+This can now be used to generate an updated time index for the perceived data. 
+
+### Generating time index
+Get raw data sets which includes the ground truth of the field of view and the the perceived data with time_number. 
+```{r}
+ground_2 <- read_ground_truth() %>% 
+  select(number_time, l2_vieww)
+
+perceived_2 <- read_landmarks("Gliders", 2) %>% 
+  select(number_time) %>% 
+  filter(number_time != 0)
+
+```
+
+Joining these data sets allows the field of view to be known for each step of the percieved data. This means that the the frequency of updates can be known for each row. 
+
+```{r}
+joined_data <- perceived_2 %>% 
+  left_join(ground_2) %>% 
+  select(-time_index) 
+```
+
+The increase for each row can be directly encoded as sa variable. This could be done in this case by dividing the column by 60, however, it is known that this relationship can change in different competitions, so the update frequencies will be manually updated. The true time index that is not effected by the stalled periods of time can then be calculated by taking a cumulative sum of this column.
+```{r}
+joined_data %>% 
+  mutate(
+    increment = case_when(
+      l2_vieww == 60 ~ 1, 
+      l2_vieww == 120 ~ 2,
+      TRUE ~ 3
+    ), 
+    time_index = cumsum(increment)
+  )
+
+```
+
+**This is incorrect** however, as there is an issue with this, as the join between the two variables will probably not accurately connect the field of view for sections in the stalled period of time. This is because the joining columns do not have unique values. This method of approach is circular, as this is the problem that we were attempting to solve in the first place. A different method needs to be used.
+
+
+### A new method - **** Issue Here ****
+A different way of doing this is through taking the ground truth value for the field of view of each player and assigning the same increment values as done above. Then using the `rle` funciton to obtain the run lengths and values of each increment and then dividing the lengths by the values. Then finally performing an inverse run length encoding operation to obtain the values. 
+
+This simulates 'skipping' the specified amount each time. The cumsum of this should then be the final version of the time index. 
+
+I cant figure out what is wrong with this, as it seems like it is slightly too long to be the real time index, but I don't see why it should be.
+
+```{r}
+increments <- ground_2 %>% 
+  mutate(
+    increment = case_when(
+      l2_vieww == 60 ~ 1, 
+      l2_vieww == 120 ~ 2,
+      TRUE ~ 3
+    ))
+
+run_lengths <- increments$increment %>% 
+  rle()
+
+new_lengths <- run_lengths$lengths/run_lengths$values
+
+new_rle <- list(lengths = new_lengths, values = run_lengths$values)
+
+time_index <- inverse.rle(new_rle) %>% 
+  cumsum()
+head(time_index)
+```
+
+**See here the issue with lengths**
+There is a difference of 34 
+
+```{r}
+length(time_index) - length(perceived_2$number_time)
+```
+
+The maximum of 6329 is also correct as this is the number of rows in the ground truth data (and therefore the number of time iterations in the data set).
+```{r}
+max(time_index)
+nrow(ground_2) 
+```
+
+
+It can also be seen that this is the correct count up until the first stalling period. This is as expected. 
+```{r}
+time_index == perceived_2$number_time
+```
+
+
