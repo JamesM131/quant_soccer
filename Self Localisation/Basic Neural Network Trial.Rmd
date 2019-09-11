@@ -1,0 +1,129 @@
+---
+title: "Basic Neural Network Trial"
+author: "James Monks"
+date: "09/09/2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+source(here::here("R", "read-utils.R"))
+```
+
+# Preface
+The groundtruth data will be used for identifying the location of each player when training the neural network. This will be used in combination with the landmark data as predictor variables.
+
+The data being used to test this is from a game that has Gliders as the left team and HELIOS as the right. This is important as the groundtruth data isnt structured in a way that uses team names, which means the correct player will be extracted using the side and the number. 
+
+For this initial run, gliders player 2 will be used.
+
+# Structuring The Data
+# Read in the data
+Get the groundtruth data and select only the columns for the gliders player 2.
+```{r}
+player_2_truth <- read_ground_truth() %>% 
+  select(l2_x, l2_y)
+head(player_2_truth)
+```
+
+
+## Obtaining Independant Variables
+
+Now obtain the observed landmark data for this player. This data will be transformed in order to create a set of standard inputs into the neural network. This will be done through first obtaining the 3 closest station measurements of angle and distance and then connecting the station coordinates. This means that the 12 inputs into the model for this basic run will be 3 distances, 3 angles and 3 sets of coordinates.
+
+
+
+
+>**Note:** There is an issue in obtaining the values for each time increment, as these increments are not unique. This is because during the "foul_charge" playode time does not pass, but players are still moving around. In the case of the groundtruth data, the row number of the data set may be considered to be a unique time index, however, for the case of the percieved data the row number does not suffice, as the frequency of updates is dependant on the current field of view for the player. 
+
+This means that there must be a custom time index created for the perceived data to match to the corresponding ground truth row. This is explored in more detail in the document "Correction of the Percieved Time Index". For the remainder of this document however *duplicated time indexes will be removed* which is okay as the basic neural network is not taking into account only independant samples of the data.
+
+The following takes the percieved landmark data, removes the duplicated time indexes and obtains the closest 3 landmarks. 
+
+```{r}
+player_2_landmarks <- 
+  read_landmarks("Gliders", 2) %>% 
+  filter(number_time != 0) %>% 
+  distinct(number_time, .keep_all = TRUE) %>% 
+  pivot_longer(-number_time, names_to  = "landmark") %>% 
+  filter(is.nan(value) == FALSE) %>% 
+  separate(landmark, sep = "_(?=[a-z]{2,})", into = c("landmark", "metric")) %>% 
+  filter(metric %in% c("dist", "angle")) %>% 
+  pivot_wider(names_from = metric, values_from = value) %>% 
+  group_by(number_time) %>% 
+  top_n(3, dist) %>% 
+  slice(1:3) 
+
+```
+
+
+This data only contains the names of the landmarks, however, the coordinates would be much more informative. This would allow the relative positions of flags to one another to be included in the model. 
+```{r}
+landmarks <- read_csv(here::here("data-raw", "landmarks.csv"))
+player_2_connected <- player_2_landmarks %>% 
+  left_join(landmarks)
+```
+
+
+This data needs to be shaped in a way that is accessible to a neural network. This means that there needs to be one angle for each observation. 
+
+The following creates variables for the flag numbers and distances/angles along with theie x and y coordinates.
+
+```{r}
+independant_variables <- player_2_connected %>%
+  mutate(flag_num = as.character(glue::glue("flag_{1:n()}"))) %>%
+  ungroup() %>%
+  pivot_longer(dist:y) %>% 
+  unite("flag_num", flag_num:name) %>% 
+  select(-landmark) %>% 
+  pivot_wider(names_from = c(flag_num))
+
+```
+
+
+## Obtain the Dependant Variables
+The dependant variables in this case are the x and y coordinates of the player at any given time. This information is stored in the ground truth data for all players. It can be accessed for player 2 of the gliders team in this case.
+
+*Note: the player that is currently being considered is from the left team and is number 2.*
+```{r}
+raw_ground_truth <- read_ground_truth() %>% 
+  select(number_time, l2_x, l2_y)
+```
+
+This data needs to be connected to the player perception data, however as mentioned before, there are a number of problems around this due to the time indexes. As was done with the previous data, only distinct occurrences of the time index will be considered. 
+
+```{r}
+long_dependant_variables <- raw_ground_truth %>%
+  distinct(number_time, .keep_all = TRUE) %>% 
+  rename(x = l2_x, y = l2_y)
+```
+
+## Connecting the data
+The ground truth data has many more observations than the percieved data due to the update frequency of the player which is based on their field of view. This means that the dependant variables cannot be used dierctly. They will be connected to the perceived data along with having a filtered copy made of them for ease of use in models.
+
+```{r}
+connected_data <- independant_variables %>% 
+  left_join(long_dependant_variables)
+
+dependant_variables <- long_dependant_variables %>% 
+  semi_join(independant_variables)
+```
+
+
+# TODO: Work on the larger data set information
+## Creating a larger data set
+For this simple architecture, with independant samples, there is no reason not to include all of the players, as each obervation is being treated as independant anyway. 
+
+### Issues to be addressed with this approach
+* Naming conventions in the ground truth data
+* Distributed files
+* Different Teams and Numbers
+
+### Collecting Data
+To collect all of the groundtruth locations, any variable that ends in "_x" or "_y" will be used.
+```{r}
+read_ground_truth() %>% 
+  select(c(ends_with("_x"), ends_with("_y")), -starts_with("ball"))
+```
+
