@@ -71,13 +71,14 @@ This data needs to be shaped in a way that is accessible to a neural network. Th
 The following creates variables for the flag numbers and distances/angles along with theie x and y coordinates.
 
 ```{r}
-independant_variables <- player_2_connected %>%
+long_independant_variables <- player_2_connected %>%
   mutate(flag_num = as.character(glue::glue("flag_{1:n()}"))) %>%
   ungroup() %>%
   pivot_longer(dist:y) %>% 
   unite("flag_num", flag_num:name) %>% 
   select(-landmark) %>% 
-  pivot_wider(names_from = c(flag_num))
+  pivot_wider(names_from = c(flag_num)) %>% 
+  na.omit()
 
 ```
 
@@ -96,19 +97,138 @@ This data needs to be connected to the player perception data, however as mentio
 ```{r}
 long_dependant_variables <- raw_ground_truth %>%
   distinct(number_time, .keep_all = TRUE) %>% 
-  rename(x = l2_x, y = l2_y)
+  rename(x = l2_x, y = l2_y) %>% 
+  na.omit()
 ```
 
 ## Connecting the data
 The ground truth data has many more observations than the percieved data due to the update frequency of the player which is based on their field of view. This means that the dependant variables cannot be used dierctly. They will be connected to the perceived data along with having a filtered copy made of them for ease of use in models.
 
+There is a known error with the time indexes that are used to connect the dependant and independant variables in that the dependant variables (ground truth) do not contain a value for the half time point (in this case 3000). This means that both objects need to be resized to fit the other. 
+
 ```{r}
-connected_data <- independant_variables %>% 
+connected_data <- long_independant_variables %>% 
   left_join(long_dependant_variables)
 
 dependant_variables <- long_dependant_variables %>% 
-  semi_join(independant_variables)
+  semi_join(long_independant_variables)
+
+independant_variables <- long_independant_variables %>% 
+  semi_join(long_dependant_variables)
 ```
+
+
+## Testing a Simple Feed Forward Neural Network
+The neural networks will be implemented in Keras. There is an implementation of this framework in R which would suffice for the needs of this application, however it is not as flexible as its python implementation. For this reason the python implementation will be prefered, however the R interface will be used to demonstrate both implentations of the framework.
+
+In order to operate with the data sets that have been built in R the reticulate package will be used as an interface. 
+
+```{r}
+library(reticulate)
+```
+
+
+Now python code chunks that utilise the r objects can be used. 
+
+Load packages
+```{python}
+import pandas
+# from keras.models import Sequential
+from keras.layers import Input, Dense
+from keras.models import Model
+
+from keras.wrappers.scikit_learn import KerasRegressor
+from sklearn.model_selection import cross_val_score
+from sklearn.model_selection import KFold
+from sklearn.preprocessing import StandardScaler
+from sklearn.pipeline import Pipeline
+from sklearn.metrics import accuracy_score
+
+# Set a seed for replication
+seed = 1
+```
+
+
+In this case the output is 2 dimensional (i.e. the x coordinate and the y coordinate). This means that the keras functional api must be used as opposed to the sequential api. This is because the sequential api will throw an error if 2 outputs are expected.
+
+```{python}
+independant_variables = r.independant_variables.values
+print(independant_variables)
+
+X = independant_variables[:,1:13]
+Y = independant_variables[:,1:3]
+
+```
+
+
+
+```{python}
+X.shape
+Y.shape
+```
+
+First defining the input layer with size = 12:
+```{python}
+input_layer = Input(shape = (12, ))
+```
+
+Now defining the remaining structure of the network:
+```{python}
+x = Dense(8, activation='relu')(input_layer)
+x = Dense(5, activation='relu')(x)
+outputs = Dense(2, activation = "linear")(x)
+```
+
+
+Now create a model by combining the two and copmile it:
+```{python}
+model = Model(inputs = input_layer, outputs = outputs)
+model.compile(loss = "mse", optimizer = "adam")
+```
+
+
+This can all be put into a function in order to use cross validation utilities.
+```{python}
+def base_nn():
+  input_layer = Input(shape = (12, ))
+  x = Dense(8, activation='relu')(input_layer)
+  x = Dense(5, activation='relu')(x)
+  outputs = Dense(2, activation = "linear")(x)
+  model = Model(inputs = input_layer, outputs = outputs)
+  model.compile(loss = "mse", optimizer = "adam")
+  return model
+
+
+```
+
+And evaluationg:
+```{python}
+
+estimator = KerasRegressor(build_fn=base_nn, nb_epoch=100, batch_size=100, verbose=False)
+kfold = KFold(n_splits=10, random_state=seed)
+results = cross_val_score(estimator, X, Y, cv=kfold)
+print("Results: %.2f (%.2f) MSE" % (results.mean(), results.std()))
+
+estimator.fit(X, Y)
+prediction = estimator.predict(X)
+
+```
+
+
+Finally fitting the raw model to the data:
+```{python}
+# model.fit(X, Y, validation_split=0.33, epochs=150, batch_size=10)
+model.fit(X, Y)
+```
+
+
+
+Now the structure of the neural network can be changed along with the input styles. The number of layers and the number of neurons per layer in this case were chosen somewhat at random (numbers being kept in the neighbourhood of the input and then scaling down through the hidden layers).
+
+**It would also be good to train seperate networks for the X and Y coordinate explicitly. **
+
+
+
 
 
 # TODO: Work on the larger data set information
@@ -123,7 +243,7 @@ For this simple architecture, with independant samples, there is no reason not t
 ### Collecting Data
 To collect all of the groundtruth locations, any variable that ends in "_x" or "_y" will be used.
 ```{r}
-read_ground_truth() %>% 
+read_ground_truth() %>%
   select(c(ends_with("_x"), ends_with("_y")), -starts_with("ball"))
 ```
 
