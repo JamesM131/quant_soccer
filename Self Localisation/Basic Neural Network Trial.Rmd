@@ -153,10 +153,12 @@ In this case the output is 2 dimensional (i.e. the x coordinate and the y coordi
 
 ```{python}
 independant_variables = r.independant_variables.values
+dependant_variables = r.dependant_variables.values
+
 print(independant_variables)
 
 X = independant_variables[:,1:13]
-Y = independant_variables[:,1:3]
+Y = dependant_variables[:,1:3]
 
 ```
 
@@ -204,8 +206,8 @@ def base_nn():
 And evaluationg:
 ```{python}
 
-estimator = KerasRegressor(build_fn=base_nn, nb_epoch=100, batch_size=100, verbose=False)
-kfold = KFold(n_splits=10, random_state=seed)
+estimator = KerasRegressor(build_fn=base_nn, nb_epoch=10000, batch_size=100, verbose=False)
+kfold = KFold(n_splits=3, random_state=seed)
 results = cross_val_score(estimator, X, Y, cv=kfold)
 print("Results: %.2f (%.2f) MSE" % (results.mean(), results.std()))
 
