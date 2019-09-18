@@ -1,0 +1,199 @@
+---
+title: "Neural Network with Lines Included"
+author: "James Monks"
+date: "18/09/2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+source(here::here("R", "read-utils.R"))
+```
+
+## Including Lines
+In this iteration of the neural network creation, the lines that are seen will be included. The lines are fundamentally different to the flags as at any one time the player should be able to see at least one (excluding times in which they are facing outside of the field). In the data set these lines are represented as `l_t_dist` where l signifies line, t indicates which line and dist is the metric (which is the same as in other flags). This is repeated for all of sides of the field and is `NaN` for lines that are not seen. 
+
+The best way of structuring this as far as I can tell is to have a variable for the line metric and a one-hot encoded metric for the side of the field that is being obsereved. 
+
+*The code below is mostly setting up for the neural network int the same way as in the basic neural network application. Any changes have been noted.*
+
+```{r}
+player_2_truth <- read_ground_truth() %>% 
+  select(l2_x, l2_y)
+head(player_2_truth)
+```
+
+
+The lines need to be treated differently to flags in this case, as though they may be a further distance than the known flags, they provide a different sort of information and are worth including.
+
+In this case it is best to use a seperatate process for creating the line metric variables than is used for the flags. The two data sets will then be combined to create the final landmark data set.
+
+*Note: when selecting the variables it is made explicit to only take the top bottom left and right as there is an additional 'close but unseen' variable for lines that is not being used.*
+```{r}
+player_2_lines <-
+  read_landmarks("Gliders", 2) %>%
+  filter(number_time != 0) %>%
+  distinct(number_time, .keep_all = TRUE) %>% 
+  select(number_time, c(starts_with("l_t"), starts_with("l_r"), starts_with("l_l"), starts_with("l_b"))) %>% 
+  pivot_longer(-number_time, names_to  = "landmark") %>% 
+  filter(is.nan(value) == FALSE) %>% 
+  separate(landmark, sep = "_(?=[a-z]{2,})", into = c("landmark", "metric")) %>% 
+  filter(metric %in% c("dist", "angle")) %>% 
+  pivot_wider(names_from = metric, values_from = value) %>% 
+  rename(line_dist = dist, line_angle = angle) %>% 
+  mutate(tmp = 1) %>% 
+  pivot_wider(names_from = landmark, values_from = tmp, values_fill = list(tmp = 0)) %>% 
+  na.omit()
+
+
+
+```
+
+
+
+```{r}
+player_2_landmarks <- 
+  read_landmarks("Gliders", 2) %>% 
+  filter(number_time != 0) %>% 
+  distinct(number_time, .keep_all = TRUE) %>% 
+  pivot_longer(-number_time, names_to  = "landmark") %>% 
+  filter(is.nan(value) == FALSE) %>% 
+  separate(landmark, sep = "_(?=[a-z]{2,})", into = c("landmark", "metric")) %>% 
+  filter(metric %in% c("dist", "angle")) %>% 
+  pivot_wider(names_from = metric, values_from = value) %>% 
+  group_by(number_time) %>% 
+  top_n(3, dist) %>% 
+  slice(1:3) 
+
+```
+
+
+```{r}
+landmarks <- read_csv(here::here("data-raw", "landmarks.csv"))
+player_2_connected <- player_2_landmarks %>% 
+  left_join(landmarks)
+```
+
+It is at this point that the data frames get joined. 
+```{r}
+long_independant_variables <- player_2_connected %>%
+  mutate(flag_num = as.character(glue::glue("flag_{1:n()}"))) %>%
+  ungroup() %>%
+  pivot_longer(dist:y) %>% 
+  unite("flag_num", flag_num:name) %>% 
+  select(-landmark) %>% 
+  pivot_wider(names_from = c(flag_num)) %>% 
+  na.omit() %>% 
+  left_join(player_2_lines)
+
+```
+
+
+```{r}
+raw_ground_truth <- read_ground_truth() %>% 
+  select(number_time, l2_x, l2_y)
+```
+
+
+```{r}
+long_dependant_variables <- raw_ground_truth %>%
+  distinct(number_time, .keep_all = TRUE) %>% 
+  rename(x = l2_x, y = l2_y) %>% 
+  na.omit()
+```
+
+```{r}
+connected_data <- long_independant_variables %>% 
+  left_join(long_dependant_variables)
+
+dependant_variables <- long_dependant_variables %>% 
+  semi_join(long_independant_variables)
+
+independant_variables <- long_independant_variables %>% 
+  semi_join(long_dependant_variables)
+```
+
+
+```{r}
+library(reticulate)
+```
+
+Now moving into the python neural network code, which is again mostly the same apart from the input shape.
+
+```{python}
+import pandas
+# from keras.models import Sequential
+from keras.layers import Input, Dense
+from keras.models import Model
+
+from keras.wrappers.scikit_learn import KerasRegressor
+from sklearn.model_selection import cross_val_score
+from sklearn.model_selection import KFold
+from sklearn.preprocessing import StandardScaler
+from sklearn.pipeline import Pipeline
+from sklearn.metrics import accuracy_score
+
+# Set a seed for replication
+seed = 1
+```
+
+```{python}
+independant_variables = r.independant_variables.values
+print(independant_variables)
+
+X = independant_variables[:,1:20]
+Y = independant_variables[:,1:3]
+
+```
+
+```{python}
+X.shape
+Y.shape
+```
+
+First defining the input layer with size = 12:
+```{python}
+input_layer = Input(shape = (18, ))
+```
+
+Now defining the remaining structure of the network:
+```{python}
+x = Dense(8, activation='relu')(input_layer)
+x = Dense(5, activation='relu')(x)
+outputs = Dense(2, activation = "linear")(x)
+```
+
+
+Now create a model by combining the two and copmile it:
+```{python}
+model = Model(inputs = input_layer, outputs = outputs)
+model.compile(loss = "mse", optimizer = "adam")
+```
+
+
+This can all be put into a function in order to use cross validation utilities.
+```{python}
+def base_nn():
+  input_layer = Input(shape = (1, ))
+  x = Dense(8, activation='relu')(input_layer)
+  x = Dense(5, activation='relu')(x)
+  outputs = Dense(2, activation = "linear")(x)
+  model = Model(inputs = input_layer, outputs = outputs)
+  model.compile(loss = "mse", optimizer = "adam")
+  return model
+
+
+```
+
+```{python}
+
+estimator = KerasRegressor(build_fn=base_nn, nb_epoch=100, batch_size=100, verbose=False)
+kfold = KFold(n_splits=10, random_state=seed)
+results = cross_val_score(estimator, X, Y, cv=kfold)
+print("Results: %.2f (%.2f) MSE" % (results.mean(), results.std()))
+
+estimator.fit(X, Y)
+prediction = estimator.predict(X)
+
+```
