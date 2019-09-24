@@ -52,16 +52,71 @@ knitr::opts_chunk$set(echo = TRUE)
 
 # Introduction
 
+* Robocup agents
+* Need for localisation based on surroundings (as with humans)
+* Variety of potential ways of solving this.
+  * Explored nethods include geometric localisation and predictions using neural networks
+
 ## Background and Motivation
+
+* Robocup is an international competition pusing forward robotics and AI research
+* It has a number of leagues with different restrictions and rules, however, the league that lends itself most to strategies involving machine learning and artificial inteliligence is the 2d simulation league. 
+  * this involves simulated players (or agents) on a field that are able to percieve other players and landmarks with known coordinates around the field.  
+
+
+* The agents do not have an intrinsic knowledge of their location on the field. They need to be able to identify their location based on their percieved surroundings
+* This is paralleled in human players in that people do not intrinsicly know their coorindates on a field, they need to be able to infer it based on their surroundings. This normally happens without conscious thought, but it does not mean that the processes are not being conducted. 
+
+
+* Creating a better location engine does not only have applications in simulated soccer matches. Knowledge of relative locations in a field is important in a number of fields such as robotics, autonomous driving, virtual reality etc. 
+
 
 ## Literature/Previous Approaches
 
 ### Geometric vs Neural networks
-For two flags the geometric approach should perform better and for more than this the neural networks should perform better. 
+
+**Currently this section is very skewed towards the self-localisation problem and should probably be adjusted to make it more general.**
+
+There are a number of ways that this can be approached. The geometric approach uses triganometry and vector algebra to calculate the location of a player based on the two flags with known coordinates. Another method of approach is to use neural networks to predict the location of a player based on a larger number of flags and possibly additional information. When restricting the data to use only 2 flags, theoretically the best possible solution should be the geometric one, however this is not an exact solution due to a degree of perception error in the observed data. If this is not the case and the neural network performs better in these situations it is likely that there is some systematic function that defines the perception error. This could then be adjusted for in the geometric application. 
+
+
+It is expected that the neural network will begin to perfom better when including more variables in the calculation (as opposed to only 2 flags). This will allow the neural network to learn weightings for the relative distances and take in information from a broader spectrum to make its prediction. It is also possible to use lagged values of the input variables, or even lagged predicted position in order to improve the accuracy of localisation.
+
+**This probably shouldn't be in this section, but I'm not sure where to put it yet and wanted to get it down**
+
+There is a noted possibility of fitting the value of the player to be exactly where they were previously when including the previous position as a variable beecause this is a very close approximation of the current location, however it is also very useful information as it suggests a region that is realistic for the player to be in. It is for this reason that the lagged inputs of the observed variables is also being considered, as this provides similar temporal information without explicitly encoding the player's previous position. This is not without its own problems, as the perception errors will exist on all of these additional variables and at times the flags that are being observed will change (e.g. due to the agent's orientation changing). The merits of these methods will be assessed in more detail and will be emperically compared. 
+
 
 ## Further Description of Data
+**I'm thinking that this section should be above the previous, as flags are mentioned there before they are defined.**
+
+* The data is based on each individual agent's percieved view of the field at a given time
+* The field has a number of fixed flags with locations known prior
+* This is shown in this map
+
+<!-- Image of map here [map] -->
+
+
 ### Nature
+**Maybe need to talk about the file conventions and multiple matches here**
+* Data is divided up into one file for each player's landmark observations for the duration of the match and one for each player's observations of the other players throughout the match.
+* There is also a ground truth data file for each match
+* Data is organised such that there is one column for each metric for each possible flag (or other player) to be observed and one row for each increment in time experienced by the player.
+* If a flag or player is outside the field of view of the subject player, the value for that cell is assigned NaN
+* The key metrics relating to players and landmarks are the distance and relative angles
+
+* **talk about perception and updates ?? maybe here, maybe above**
+
 ### Data Cleaning
+
+* The data in its raw form is in no way ameanable to being used as an input to a neural network or to be used in geometric prediction
+* The data has been cleaned by obtaining the closest n observed flags to the player for each time increment'
+  * This has been done because it has been determined that the perception error is proportional to the distance from the player
+* The metrics are separated out and the resultant data has a column for each metric for each of the n closest flags
+* As the flags have been converted from relative to absolute entities, the x and y coordinated for each of them is also assigned a variable
+* This results in a data set containing each metric and two coordinate variables for each of the n closest flag
+* Denoted ad flag_1...flag_n for the 1st to nth closest flags.
+* This maintains all of the relevant information while organising it ina way that is readable by the neural networks or geometric localisation algorithms.
 
 ## Core research questions
 ### 1. something
