@@ -17,13 +17,29 @@
 #' @examples
 #' read_moving("Gliders", 2)
 read_moving <- function(team, player) {
-  # browser()
+  
   all_files <- fs::dir_ls(here::here("data-raw", "Z-example-csv")) 
   
-  all_files %>% 
-    stringr::str_subset(glue::glue("{team}.+{team}.+_{player}-moving")) %>% 
+  relevant_file <- all_files %>% 
+    stringr::str_subset(glue::glue("{team}.+{team}.+_{player}-moving")) 
+  
+  left_team <- relevant_file %>% 
+    stringr::str_extract(c("HELIOS|Gliders"))
+  
+  if(team == left_team) {
+    side <- "left"
+  } else {
+    side <- "right"
+  }
+  
+  return_file <- relevant_file %>% 
     readr::read_csv() %>% 
     janitor::clean_names()
+  attr(return_file, "side") <- side
+  attr(return_file, "team") <- team
+  attr(return_file, "number") <- player
+  
+  return(return_file)
 }
 
 #' Read landmarks for a player
@@ -46,10 +62,26 @@ read_landmarks <- function(team, player) {
   
   all_files <- fs::dir_ls(here::here("data-raw", "Z-example-csv")) 
   
-  all_files %>% 
-    stringr::str_subset(glue::glue("{team}.+{team}.+_{player}-landmarks")) %>% 
+  relevant_file <- all_files %>% 
+    stringr::str_subset(glue::glue("{team}.+{team}.+_{player}-landmarks")) 
+  
+  left_team <- relevant_file %>% 
+    stringr::str_extract(c("HELIOS|Gliders"))
+  
+  if(team == left_team) {
+    side <- "left"
+  } else {
+    side <- "right"
+  }
+  
+  return_file <- relevant_file %>% 
     readr::read_csv() %>% 
     janitor::clean_names()
+  attr(return_file, "side") <- side
+  attr(return_file, "team") <- team
+  attr(return_file, "number") <- player
+  
+  return(return_file)
 }
 
 
