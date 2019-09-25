@@ -1,0 +1,195 @@
+---
+title: "Evaluating Geometic Localisation"
+author: "James Monks"
+date: "20/09/2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+source(here::here("R", "read-utils.R"))
+library(tidyverse)
+set.seed(1)
+```
+
+## Preface
+
+In order to evaluate the effectiveness of neural networks when applied to the problem of self localisation, the accuracy of the baseline geometric solution will be assesed. This process is described in more detail in the file first-triangulation. The geometric solution theoretically should produce zero error when applied to the data, however, there is an inbuilt perception error in the measurements of both distance and angle that is reported by each player. The localisation is performed geometrically using two known flags, which means that a neural network considering only two flags should have at best this level of performance (assuming no systematic error). The advantage of neural networks then is using more data such as additional flags, visible lines and lagged locations. 
+
+## Data Preparation
+
+First the functions prepared for this task will be sourced.
+```{r}
+source(here::here("Self Localisation", "Geometric Localisation", "geometric_self_localisation.R"))
+```
+
+The get_position function requires the distance and angle values of two known flags and the coordinates of these flags. Given this information the function will output both the x and y coordinates.
+
+The data needs to be structured to obtain variables that represent each of these values. 
+
+The code below operates on a single player and extracts the closest flags. It then connects the perceived data to the known ground truth location of the player at a given time. It also connects the coordinates of the landmarks to the data set. This is everything that is needed to make a prediction of where the player currently is and compare that to the known ground truth. 
+```{r}
+player_2_landmarks <- 
+  read_landmarks("Gliders", 2) %>% 
+  filter(number_time != 0) %>% 
+  distinct(number_time, .keep_all = TRUE) %>% 
+  pivot_longer(-number_time, names_to  = "landmark") %>% 
+  filter(is.nan(value) == FALSE) %>% 
+  separate(landmark, sep = "_(?=[a-z]{2,})", into = c("landmark", "metric")) %>% 
+  filter(metric %in% c("dist", "angle")) %>% 
+  pivot_wider(names_from = metric, values_from = value) %>% 
+  group_by(number_time) %>% 
+  top_n(3, dist) %>% 
+  slice(1:2) 
+
+landmarks <- read_csv(here::here("data-raw", "landmarks.csv"))
+player_2_connected <- player_2_landmarks %>% 
+  left_join(landmarks)
+
+long_independant_variables <- player_2_connected %>%
+  mutate(flag_num = as.character(glue::glue("flag_{1:n()}"))) %>%
+  ungroup() %>%
+  pivot_longer(dist:y) %>% 
+  unite("flag_num", flag_num:name) %>% 
+  select(-landmark) %>% 
+  pivot_wider(names_from = c(flag_num)) %>% 
+  na.omit()
+
+
+raw_ground_truth <- read_ground_truth() %>% 
+  select(number_time, l2_x, l2_y)
+
+long_dependant_variables <- raw_ground_truth %>%
+  distinct(number_time, .keep_all = TRUE) %>% 
+  rename(x = l2_x, y = l2_y) %>% 
+  na.omit()
+
+
+connected_data <- long_independant_variables %>% 
+  left_join(long_dependant_variables)
+
+dependant_variables <- long_dependant_variables %>% 
+  semi_join(long_independant_variables)
+
+independant_variables <- long_independant_variables %>% 
+  semi_join(long_dependant_variables)
+
+```
+
+
+Now we have in the `independant_variables` object all of the required infomration to produce predictions of the location for each point in time. The `dependant_variables` object contains the ground truth information.
+
+## Making Predictions
+The predictions will be made on this first player as an example before extending these predictions to the larger dataset of all players and all games. 
+
+```{r}
+
+# predictions <- independant_variables %>%
+#   pmap_df(function(flag_1_angle, flag_1_dist, flag_2_angle, flag_2_dist, flag_1_x, flag_1_y, flag_2_x, flag_2_y, ...) {
+#     
+#     get_position(flag_1_angle, flag_1_dist, flag_2_angle, flag_2_dist, c(flag_1_x, flag_1_y), c(flag_2_x, flag_2_y)) %>% as.data.frame()
+#   }) %>% 
+#   set_names("x_hat", "y_hat") %>% 
+#   mutate(number_time = independant_variables$number_time)
+
+# Replacing with radians
+predictions <- independant_variables %>%
+  pmap_df(function(flag_1_angle, flag_1_dist, flag_2_angle, flag_2_dist, flag_1_x, flag_1_y, flag_2_x, flag_2_y, ...) {
+    flag_1_angle <- measurements::conv_unit(flag_1_angle, "degree", "radian")
+    flag_2_angle <- measurements::conv_unit(flag_2_angle, "degree", "radian")
+    get_position(flag_1_angle, flag_1_dist, flag_2_angle, flag_2_dist, c(flag_1_x, flag_1_y), c(flag_2_x, flag_2_y)) %>% as.data.frame()
+  }) %>% 
+  set_names("x_hat", "y_hat") %>% 
+  mutate(number_time = independant_variables$number_time)
+```
+
+
+
+## Comparing the results. 
+TODO: This needs to be converted into MSE so that it is consistent with the neural network error metric evaluation. This should also be looked into as the results seem very far off (though this may just be because of the perception error). 
+```{r}
+results <- predictions %>% 
+  left_join(dependant_variables, by = c("number_time")) %>% 
+  mutate(
+    x_delta = sqrt((x_hat - x)^2), 
+    y_delta = sqrt((y_hat - y)^2), 
+    xy_delta = x_delta + y_delta
+  )
+overall_error <- sum(results$xy_delta)
+mean_error <- mean(results$xy_delta)
+results_squared <- predictions %>% 
+  left_join(dependant_variables, by = c("number_time")) %>% 
+  mutate(
+    x_delta = ((x_hat - x)^2), 
+    y_delta = ((y_hat - y)^2), 
+    xy_delta = x_delta + y_delta
+  )
+mean_error_squared <- mean(results_squared$xy_delta)
+# mean_error
+glue::glue("The overall error is {round(overall_error, 3)}, with mean error: {round(mean_error, 3)} (average x: {round(mean(results$x_delta))} ,average y: {round(mean(results$y_delta))}) and a mean squared error of: {round(mean_error_squared)}")
+
+# Mean square error
+
+```
+
+
+## Sanity Check
+These errors seem to be very large, in particular the error in the x direction. It should be noted that this is only for the one player and may be to do with their orientation, however 80 is a very big difference. In theory this is due to the perception error, however it would be good to do a sanity check on the two potential sources of mistake. These sources are namely they maths behind the geometric method and the way in which it is applied to the given data. 
+
+### The Maths/Code
+It is relatively simple to check whether or not there is an error in the code behind the `get_positoin` function. This can be done through taking a triangle with known relative with known vetex coordinates, side lengths, angles etc and plugging all needed values into the function. If the results are wildly off then there is likely something wrong with the implementation.
+
+Take the simple exact value triangle with the following vetex coordinates: 
+A: (0, 0)
+B: (0, 1)
+C: (1, 0)
+
+Now encoding this in a triangle
+```{r}
+test_triangle <- tibble(
+  x = c(0, 0, 1, 0),
+  y = c(0, 1, 0, 0), 
+  label = c("A", "B", "C", "A")
+)
+test_triangle %>% 
+  ggplot(aes(x = x, y = y)) + 
+  geom_hline(yintercept = 0, colour = "grey") + 
+  geom_vline(xintercept = 0, colour = "grey")+
+  geom_path(colour = "red") + 
+  geom_point(colour = "blue") + 
+  geom_label(aes(label = label)) +
+  xlim(-1, 2) + 
+  ylim(-1, 2) 
+```
+
+
+
+This results in the following information:
+
+Angle ∠ A = α = 90° = 1.571 rad
+Angle ∠ B = β = 45° = 0.785 rad
+Angle ∠ C = γ = 45° = 0.785 rad
+
+Sides: AC = 1.414  AB = 1 AC = 1
+
+Now taking point A for example as the player and utilising B and C as known flags, the coordinate of A can be predicted. 
+
+For the sake of simplicity, the relative angles will be viewed as a bisection (i.e. assume that the player is facing the mid point of the two flags).
+
+```{r}
+get_position(l1_angle =-45, l1_dist = 1, l2_angle = 45, l2_dist = 1, l1 = c(1, 0), l2 = c(0, 1))
+```
+
+This is close for x but off for y. 
+
+Over the course of doing this exercise I have realised that i originally coded the `get_position` file to work with radians. Repeating with radians as opposed to degrees
+
+```{r}
+get_position(l1_angle =-0.785, l1_dist = 1, l2_angle = 0.785, l2_dist = 1, l1 = c(1, 0), l2 = c(0, 1))
+```
+Which is close enough to 0 to be caused by a  a rounding error. There is the potential for this to be further reduce this by reducing the rounding and overall number of functions called in the function. This is not a priority currently as the results are very close to the actual value that is required.
+
+
+After applying these changes above the results have improved a lot.
+
+### Application to the Data
