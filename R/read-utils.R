@@ -27,9 +27,9 @@ read_moving <- function(team, player) {
     stringr::str_extract(c("HELIOS|Gliders"))
   
   if(team == left_team) {
-    side <- "left"
+    side <- "l"
   } else {
-    side <- "right"
+    side <- "r"
   }
   
   return_file <- relevant_file %>% 
@@ -69,9 +69,9 @@ read_landmarks <- function(team, player) {
     stringr::str_extract(c("HELIOS|Gliders"))
   
   if(team == left_team) {
-    side <- "left"
+    side <- "l"
   } else {
-    side <- "right"
+    side <- "r"
   }
   
   return_file <- relevant_file %>% 
