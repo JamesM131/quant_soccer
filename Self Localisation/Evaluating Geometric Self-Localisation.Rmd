@@ -7,6 +7,7 @@ output: html_document
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
+fs::dir_map(here::here("R"), source)
 source(here::here("R", "read-utils.R"))
 library(tidyverse)
 set.seed(1)
@@ -126,7 +127,7 @@ results_squared <- predictions %>%
   )
 mean_error_squared <- mean(results_squared$xy_delta)
 # mean_error
-glue::glue("The overall error is {round(overall_error, 3)}, with mean error: {round(mean_error, 3)} (average x: {round(mean(results$x_delta))} ,average y: {round(mean(results$y_delta))}) and a mean squared error of: {round(mean_error_squared)}")
+glue::glue("The overall error is {round(overall_error, 3)}, with mean suqred error: {round(mean_error, 3)} (average x: {round(mean(results$x_delta))} ,average y: {round(mean(results$y_delta))}) and a mean squared error of: {round(mean_error_squared)}")
 
 # Mean square error
 
@@ -192,4 +193,10 @@ Which is close enough to 0 to be caused by a  a rounding error. There is the pot
 
 After applying these changes above the results have improved a lot.
 
-### Application to the Data
+# Application to Large Data Sets
+Now that this has been assesed, the geometric applications can be evaluated on the larger data set from the entire match.
+
+```{r}
+all_data <- 
+```
+
