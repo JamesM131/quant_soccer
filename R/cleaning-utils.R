@@ -1,5 +1,5 @@
-get_clean_data <- function(data, n_flags = 3) {
-
+get_clean_data <- function(data, n_flags = 3, game) {
+  # browser()
   long_landmarks <- data %>% 
     filter(number_time != 0) %>% 
     distinct(number_time, .keep_all = TRUE) %>% 
@@ -22,7 +22,10 @@ get_clean_data <- function(data, n_flags = 3) {
     pivot_wider(names_from = c(flag_num)) %>% 
     na.omit()
   
-  if(attr(data, 'number') == 1) {
+  # Note that the goalkeeper for oxsy is 7 not 1
+  if(attr(data, "team") == "Oxsy" && attr(data, 'number') == 7) {
+    number <- 'g7'
+  } else if(attr(data, 'number') == 1 && attr(data, "team") != "Oxsy") {
     number <- "g1"
   } else {
     number <- attr(data, 'number')
@@ -34,7 +37,7 @@ get_clean_data <- function(data, n_flags = 3) {
   y_coords <- glue::glue("{attr(data, 'side')}{number}_y") %>% 
     rlang::parse_expr()
   
-  long_dependant_variables <- read_ground_truth() %>% 
+  long_dependant_variables <- read_ground_truth(game = game) %>% 
     select(number_time, x = !!x_coords, y = !!y_coords) %>% 
     distinct(number_time, .keep_all = TRUE) %>% 
     na.omit()

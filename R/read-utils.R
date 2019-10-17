@@ -15,16 +15,21 @@
 #' @export
 #'
 #' @examples
-#' read_moving("Gliders", 2)
-read_moving <- function(team, player) {
+#' read_moving("Oxsy", 2)
+read_moving <- function(team, player, game = 1) {
   
-  all_files <- fs::dir_ls(here::here("data-raw", "Z-example-csv")) 
+  all_files <- fs::dir_ls("data-raw/X-top5-csv") %>% 
+    str_subset(glue::glue("^\\D*\\d+\\D+({game}+)")) %>% 
+    fs::dir_ls()
+  
+  
+  # all_files <- fs::dir_ls(here::here("data-raw", "Z-example-csv")) 
   
   relevant_file <- all_files %>% 
-    stringr::str_subset(glue::glue("{team}.+{team}.+_{player}-moving")) 
+    stringr::str_subset(glue::glue("{team}.+{team}_{player}-moving")) 
   
   left_team <- relevant_file %>% 
-    stringr::str_extract(c("HELIOS|Gliders"))
+    stringr::str_extract("(?<=data-raw\\/X-top5-csv\\/\\d-)[a-zA-Z0-9]+")
   
   if(team == left_team) {
     side <- "l"
@@ -57,16 +62,26 @@ read_moving <- function(team, player) {
 #' @export
 #'
 #' @examples
-#' read_landmarks("Gliders", 2)
-read_landmarks <- function(team, player) {
+#' read_landmarks("Oxsy", 2)
+read_landmarks <- function(team, player, game = 1) {
+  # browser()
+  # all_files <- fs::dir_ls(here::here("data-raw", "Z-example-csv")) 
+  all_files <- fs::dir_ls(here::here("data-raw","Evaluation-Games")) %>%
+    str_subset(glue::glue("\\/{game}-")) %>% 
+    fs::dir_ls()
   
-  all_files <- fs::dir_ls(here::here("data-raw", "Z-example-csv")) 
+  
+  
+  # relevant_file <- all_files %>% 
+  #   # stringr::str_subset(glue::glue("{team}.+{team}_{player}-moving")) 
+  #   stringr::str_subset(glue::glue("{team}.+{team}\\d*_{player}-landmarks"))
   
   relevant_file <- all_files %>% 
-    stringr::str_subset(glue::glue("{team}.+{team}.+_{player}-landmarks")) 
+    # stringr::str_subset(glue::glue("{team}.+{team}_{player}-moving")) 
+    stringr::str_subset(glue::glue("{team}.+{team}_*[A-Za-z]*_{player}-landmarks"))
   
   left_team <- relevant_file %>% 
-    stringr::str_extract(c("HELIOS|Gliders"))
+    stringr::str_extract("(?<=data-raw\\/Evaluation-Games\\/\\d{1,2}-)[a-zA-Z0-9]+")
   
   if(team == left_team) {
     side <- "l"
@@ -94,12 +109,29 @@ read_landmarks <- function(team, player) {
 #' @export
 #'
 #' @examples
-read_ground_truth <- function() {
-  all_files <- fs::dir_ls(here::here("data-raw", "Z-example-csv")) 
+read_ground_truth <- function(game) {
   
-  all_files %>% 
-    stringr::str_subset("groundtruth") %>% 
+  all_files <- fs::dir_ls(here::here("data-raw","Evaluation-Games")) %>%
+    str_subset(glue::glue("\\/{game}-")) %>% 
+    fs::dir_ls()
+  
+  relevant_file <- all_files %>% 
+    stringr::str_subset(glue::glue("groundtruth"))
+  
+  relevant_file %>% 
     readr::read_csv() %>% 
     janitor::clean_names()
 }
 
+read_game <- function(game) {
+  get_all_landmarks(game = game)
+}
+
+read_all_games <- function(n_games, from_game = 1) {
+  # browser()
+  games <- from_game:n_games
+  games %>% 
+    map_df(~{
+      read_game(.x)
+    })
+}
