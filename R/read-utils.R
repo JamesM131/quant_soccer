@@ -123,15 +123,16 @@ read_ground_truth <- function(game) {
     janitor::clean_names()
 }
 
-read_game <- function(game) {
-  get_all_landmarks(game = game)
+read_game <- function(game, line = FALSE) {
+  get_all_landmarks(game = game, line = line)
 }
 
-read_all_games <- function(n_games, from_game = 1) {
+read_all_games <- function(n_games, from_game = 1, line = FALSE) {
   # browser()
   games <- from_game:n_games
+  
   games %>% 
-    map_df(~{
-      read_game(.x)
-    })
+      map_df(~{
+        read_game(.x, line = line)
+      })
 }

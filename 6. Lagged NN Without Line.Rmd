@@ -1,0 +1,148 @@
+---
+title: "6. Lagged NN Without Line"
+author: "James Monks"
+date: "18/10/2019"
+output: html_document
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+fs::dir_map(here::here("R"), source)
+```
+
+# Read Data
+```{r}
+# train_raw <- read_all_games(8, line = TRUE)
+
+train_raw <- readr::read_rds(here::here("data", "train_data.rds"))
+
+train_lagged <- train_raw %>% 
+  select(starts_with("flag")) %>% 
+  mutate_all(dplyr::lag) %>% 
+  rename_all(~paste0(., "_lagged_1")) %>% 
+  bind_cols(train_raw) %>% 
+  na.omit()
+
+# test_raw <- read_all_games(10, from_game = 9, line = TRUE)
+test_raw <- readr::read_rds(here::here("data", "test_data.rds"))
+
+test_lagged <- test_raw %>% 
+  select(starts_with("flag")) %>% 
+  mutate_all(dplyr::lag) %>% 
+  rename_all(~paste0(., "_lagged_1")) %>% 
+  bind_cols(test_raw) %>% 
+  na.omit()
+```
+
+# Process Data
+```{r}
+library(tidymodels)
+
+input_rec <- recipe(x + y ~ ., data = train_lagged) %>% 
+  step_scale(all_predictors()) %>% 
+  step_center(all_predictors()) %>% 
+  step_rm(game) %>% 
+  step_rm(number_time)
+
+input_prepped <- input_rec %>% 
+  prep(retain = TRUE)
+
+
+flags_train <- input_prepped %>% 
+  bake(train_lagged)
+
+flags_test <- input_prepped %>% 
+  bake(test_lagged)
+
+independant_variables <- flags_train %>% 
+  select(-c(x, y))
+
+dependant_variables <- flags_train %>% 
+  select(x, y)
+
+testing_variables <- flags_test %>% 
+  select(-c(x, y))
+```
+
+
+
+# Data Modelling
+Set up python environment
+
+```{python}
+import pandas
+# from keras.models import Sequential
+from keras.layers import Input, Dense
+from keras.models import Model
+
+from keras.wrappers.scikit_learn import KerasRegressor
+from sklearn.model_selection import cross_val_score
+from sklearn.model_selection import KFold
+from sklearn.preprocessing import StandardScaler
+from sklearn.pipeline import Pipeline
+from sklearn.metrics import accuracy_score
+
+# Set a seed for replication
+seed = 1
+```
+
+
+```{python}
+X = r.independant_variables.values
+X_test = r.testing_variables.values
+
+Y = r.dependant_variables.values
+```
+
+```{python}
+X.shape
+X_test.shape
+Y.shape
+```
+
+
+```{python}
+input_layer = Input(shape = (24, )) # Update here
+x = Dense(12, activation='relu')(input_layer)
+x = Dense(6, activation='relu')(x)
+outputs = Dense(2, activation = "linear")(x)
+
+model = Model(inputs = input_layer, outputs = outputs)
+model.compile(loss = "mse", optimizer = "adam")
+
+```
+
+Fit the model
+```{python}
+model.fit(X, Y, batch_size=100, epochs=10, validation_split=0.3)
+```
+
+Make predictions
+```{python}
+predictions = model.predict(X_test)
+```
+
+
+# Evaluate the model
+```{r}
+library(reticulate)
+predictions <- py$predictions %>% 
+  as_tibble() %>% 
+  set_names(c("x", "y"))
+
+ground_truth <- flags_test %>% 
+  select(c(x, y))
+
+x_mse <- mean((ground_truth$x - predictions$x)^2)
+y_mse <- mean((ground_truth$y - predictions$y)^2)
+total_mse <- mean(c(x_mse, y_mse))
+glue::glue("MSE Results: x = {round(x_mse)}, y = {round(y_mse)}, total = {round(total_mse)}")
+```
+
+# Saving Prediction Data
+```{r}
+predictions %>% 
+  write_rds(here::here("Results Data", "6_lagged_sans_line.rds"))
+```

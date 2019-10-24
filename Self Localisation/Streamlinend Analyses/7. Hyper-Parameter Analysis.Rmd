@@ -1,0 +1,64 @@
+---
+title: "Hyper-Parameter Analysis"
+author: "James Monks"
+date: "23/10/2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+```
+
+It takes way too long to actually run the hyper-parameter code every single time, but it is reasonable to save the results and run a separate analysis file. 
+
+First read it in. 
+```{r}
+prediction_list <- read_rds(here::here("Results Data", "30_network_hyperparameter_data.rds"))
+param_list <- read_rds(here::here("Results Data", "Parameters_for_hyperparameter_tuning.rds"))
+ground_truth <- read_rds(here::here("Results Data", "ground_truth.rds"))
+```
+
+
+Getting the best performing neural network:
+```{r}
+total_mse_list <- prediction_list %>% 
+  map_dbl(~{
+    x_mse <- mean((ground_truth$x - .x$x)^2)
+    y_mse <- mean((ground_truth$y - .x$y)^2)
+    # x_mse <- mean((ground_truth$x - .x$x)^2, na.rm = TRUE)
+    # y_mse <- mean((ground_truth$y - .x$y)^2, na.rm = TRUE)
+    total_mse <- sum(c(x_mse, y_mse))
+    return(total_mse)
+  })
+
+min(total_mse_list)
+min_index <- which.min(total_mse_list)
+
+```
+
+Obtaining the relevant metrics
+```{r}
+predictions <- prediction_list %>% 
+  pluck(6)
+
+x_mse <- mean((ground_truth$x - predictions$x)^2)
+y_mse <- mean((ground_truth$y - predictions$y)^2)
+
+total_mse <- sum(c(x_mse, y_mse))
+glue::glue("MSE Results: x = {round(x_mse)}, y = {round(y_mse)}, total = {round(total_mse)}")
+
+```
+
+Get the hyper parameters:
+```{r}
+param_list %>% 
+  map(6)
+```
+
+Save best predictions
+```{r}
+predictions %>% 
+  write_rds(here::here("Results Data", "7_hyper_parameter.rds"))
+```
+

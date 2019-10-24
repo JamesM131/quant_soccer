@@ -1,4 +1,4 @@
-get_all_landmarks <- function(n_flags = 3, game = 1){
+get_all_landmarks <- function(n_flags = 3, game = 1, line = FALSE){
   # browser()
    sample_file <- fs::dir_ls(here::here("data-raw","Evaluation-Games")) %>%
       str_subset(glue::glue("\\/{game}-")) %>% 
@@ -24,7 +24,11 @@ get_all_landmarks <- function(n_flags = 3, game = 1){
      map_df(~{
         # browser()
        pb$tick()
-         suppressMessages(get_clean_data(read_landmarks(.x[[1]], .x[[2]], game = game), n_flags = n_flags, game = game))
+        if(line) {
+           suppressMessages(get_clean_data_line(read_landmarks(.x[[1]], .x[[2]], game = game), n_flags = n_flags, game = game))
+        } else {
+           suppressMessages(get_clean_data(read_landmarks(.x[[1]], .x[[2]], game = game), n_flags = n_flags, game = game))
+        }
      }) %>% 
       mutate(game = game)
 }

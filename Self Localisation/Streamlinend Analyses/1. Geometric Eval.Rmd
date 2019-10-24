@@ -1,0 +1,60 @@
+---
+title: "1. Geometric Eval"
+author: "James Monks"
+date: "16/10/2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+fs::dir_map(here::here("R"), source)
+source(here::here("Self Localisation", "Geometric Localisation", "geometric_self_localisation.R"))
+```
+
+# Read Data
+The geometric approach to predicting the locations of players does not rely on any training data as it is simply an application of a function. To remain consistent with the rest of the analyses, only the testing data set will be used to evaluate this measure. 
+
+```{r}
+# test_data <- read_all_games(10, from_game = 9) %>% 
+  # na.omit()
+test_data <- read_rds(here::here("data", "test_data.rds"))
+```
+
+# Data Processing
+We probably don't want to scale the predictor variables here as this would not change the resultant calculations and would add another step to the process. 
+
+This data processing is mostly about selecting only the closest 2 flags and removing unneeded variables (this is not required though as the pmap function only takes the important sections).
+
+
+# Predictions
+Now making predictions of the data using the get position function (see other markdown files)
+
+
+```{r}
+predictions <- test_data %>%
+  pmap_df(function(flag_1_angle, flag_1_dist, flag_2_angle, flag_2_dist, flag_1_x, flag_1_y, flag_2_x, flag_2_y, ...) {
+    flag_1_angle <- measurements::conv_unit(flag_1_angle, "degree", "radian")
+    flag_2_angle <- measurements::conv_unit(flag_2_angle, "degree", "radian")
+    get_position(flag_1_angle, flag_1_dist, flag_2_angle, flag_2_dist, c(flag_1_x, flag_1_y), c(flag_2_x, flag_2_y)) %>% as.data.frame()
+  }) %>% 
+  set_names("x_hat", "y_hat") %>% 
+  mutate(number_time = test_data$number_time)
+```
+
+# Evaluating
+The data will be evaluated by taking the mse of the predictions and the ground truth.
+
+```{r}
+x_mse <- mean((test_data$x - predictions$x_hat)^2)
+y_mse <- mean((test_data$y - predictions$y_hat)^2)
+total_mse <- mean(c(x_mse, y_mse))
+glue::glue("MSE Results: x = {round(x_mse)}, y = {round(y_mse)}, total = {round(total_mse)}")
+```
+
+# Saving Prediction Data
+```{r}
+predictions %>% 
+  write_rds(here::here("Results Data", "1_geometry.rds"))
+```
+

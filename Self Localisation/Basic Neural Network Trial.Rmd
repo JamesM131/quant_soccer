@@ -8,7 +8,8 @@ output: html_document
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 library(tidyverse)
-source(here::here("R", "read-utils.R"))
+fs::dir_map(here::here("R"), source)
+# source(here::here("R", "read-utils.R"))
 ```
 
 # Preface
@@ -232,20 +233,55 @@ Now the structure of the neural network can be changed along with the input styl
 
 
 
-
-# TODO: Work on the larger data set information
-## Creating a larger data set
-For this simple architecture, with independant samples, there is no reason not to include all of the players, as each obervation is being treated as independant anyway. 
-
-### Issues to be addressed with this approach
-* Naming conventions in the ground truth data
-* Distributed files
-* Different Teams and Numbers
-
-### Collecting Data
-To collect all of the groundtruth locations, any variable that ends in "_x" or "_y" will be used.
+## Applying this to a larger data set
+Now this same application of a neural network will be applied to the data set that consists of all of the players for a single match. This data is collected here:
 ```{r}
-read_ground_truth() %>%
-  select(c(ends_with("_x"), ends_with("_y")), -starts_with("ball"))
+all_data <- get_all_landmarks(n_flags = 2) %>% 
+  na.omit()
+head(all_data)
+```
+
+The resultant data contains both the observed flag data along with the ground truth data. 
+
+```{r}
+all_independant_variables <- all_data %>% 
+  select(-c(x, y))
+
+all_dependant_variables <- all_data %>% 
+  select(-starts_with("flag"))
+```
+
+
+```{python}
+independant_variables = r.all_independant_variables.values
+dependant_variables = r.all_dependant_variables.values
+
+print(independant_variables)
+
+X = independant_variables[:,1:13]
+Y = dependant_variables[:,1:3]
+
+```
+
+```{python}
+def base_nn():
+  input_layer = Input(shape = (8, ))
+  x = Dense(8, activation='relu')(input_layer)
+  x = Dense(5, activation='relu')(x)
+  outputs = Dense(2, activation = "linear")(x)
+  model = Model(inputs = input_layer, outputs = outputs)
+  model.compile(loss = "mse", optimizer = "adam")
+  return model
+```
+
+```{python}
+estimator = KerasRegressor(build_fn=base_nn, nb_epoch=10000, batch_size=100, verbose=False)
+kfold = KFold(n_splits=3, random_state=seed)
+results = cross_val_score(estimator, X, Y, cv=kfold)
+print("Results: %.2f (%.2f) MSE" % (results.mean(), results.std()))
+
+estimator.fit(X, Y)
+prediction = estimator.predict(X)
+
 ```
 

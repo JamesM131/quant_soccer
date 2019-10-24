@@ -160,7 +160,8 @@ test_triangle %>%
   geom_point(colour = "blue") + 
   geom_label(aes(label = label)) +
   xlim(-1, 2) + 
-  ylim(-1, 2) 
+  ylim(-1, 2) + 
+  ggthemes::theme_fivethirtyeight()
 ```
 
 
@@ -196,7 +197,51 @@ After applying these changes above the results have improved a lot.
 # Application to Large Data Sets
 Now that this has been assesed, the geometric applications can be evaluated on the larger data set from the entire match.
 
+For some reason there are about 550 NAs for x and y in this data set. I don't know why, but for the moment I am filtering it all out. This filtering is done in the results calculation section.
+
 ```{r}
-all_data <- 
+all_data <- get_all_landmarks(n_flags = 2)
+head(all_data)
+```
+
+```{r}
+pb <- progress::progress_bar$new(total = nrow(all_data))
+
+all_predictions <- all_data %>%
+  pmap_df(function(flag_1_angle, flag_1_dist, flag_2_angle, flag_2_dist, flag_1_x, flag_1_y, flag_2_x, flag_2_y, ...) {
+    pb$tick()
+    flag_1_angle <- measurements::conv_unit(flag_1_angle, "degree", "radian")
+    flag_2_angle <- measurements::conv_unit(flag_2_angle, "degree", "radian")
+    get_position(flag_1_angle, flag_1_dist, flag_2_angle, flag_2_dist, c(flag_1_x, flag_1_y), c(flag_2_x, flag_2_y)) %>% as.data.frame()
+  }) %>% 
+  set_names("x_hat", "y_hat") %>% 
+  mutate(number_time = all_data$number_time)
+```
+
+
+```{r}
+all_dependant_variables <- all_data %>% 
+  select(number_time, x, y)
+
+all_results <- all_predictions %>% 
+  left_join(all_dependant_variables, by = c("number_time")) %>% 
+  na.omit() %>% 
+  mutate(
+    x_delta = sqrt((x_hat - x)^2), 
+    y_delta = sqrt((y_hat - y)^2), 
+    xy_delta = x_delta + y_delta
+  )
+overall_error <- sum(all_results$xy_delta)
+mean_error <- mean(all_results$xy_delta)
+results_squared <- predictions %>% 
+  left_join(dependant_variables, by = c("number_time")) %>% 
+  mutate(
+    x_delta = ((x_hat - x)^2), 
+    y_delta = ((y_hat - y)^2), 
+    xy_delta = x_delta + y_delta
+  )
+mean_error_squared <- mean(results_squared$xy_delta)
+# mean_error
+glue::glue("The overall error is {round(overall_error, 3)}, with mean suqred error: {round(mean_error, 3)} (average x: {round(mean(all_results$x_delta))} ,average y: {round(mean(all_results$y_delta))}) and a mean squared error of: {round(mean_error_squared)}")
 ```
 

@@ -1,0 +1,23 @@
+---
+title: "Evaluation Framework"
+author: "James Monks"
+date: "09/10/2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+# Thought Dump
+The models should be scaled and hten sliced up.
+
+No real need for CV
+
+Use 7 games training, 2 validation, 1 testing
+     * Write functions to get different games. 
+
+Make predictions and manually calculate the MSE
+
+This process should be applied to the geometric method too.

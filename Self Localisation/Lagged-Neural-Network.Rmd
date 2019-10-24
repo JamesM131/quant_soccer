@@ -1,0 +1,280 @@
+---
+title: "Lagged Input Neural Network"
+author: "James Monks"
+date: "08/10/2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+fs::dir_map(here::here("R"), source)
+```
+
+```{r}
+# landmark_data <- get_all_landmarks(n_flags = 3) %>% 
+#   select(-number_time)
+landmark_data <- read_all_games(8)
+```
+
+
+```{r}
+lagged_data <- landmark_data %>% 
+  select(starts_with("flag")) %>% 
+  mutate_all(dplyr::lag) %>% 
+  rename_all(~paste0(., "_lagged_1")) %>% 
+  bind_cols(landmark_data) %>% 
+  na.omit()
+```
+
+# Separating Training and Testing
+
+```{r}
+library(tidymodels)
+
+flag_split <- initial_split(lagged_data)
+
+lagged_train <- training(flag_split)
+lagged_test <- testing(flag_split)
+
+input_rec <- recipe(x + y ~ ., data = lagged_data) %>% 
+  step_scale(all_predictors()) %>% 
+  step_center(all_predictors()) %>% 
+  step_rm(game)
+
+input_prepped <- input_rec %>% 
+  prep(retain = TRUE)
+
+
+flags_train <- input_prepped %>% 
+  bake(lagged_train) %>% 
+  na.omit()
+
+flags_test <- input_prepped %>% 
+  bake(lagged_train) %>% 
+  na.omit()
+```
+
+
+```{r}
+lagged_independant <- flags_train %>% 
+  select(-c(x, y)) 
+
+lagged_independant_test <- flags_test %>% 
+  select(-c(x, y))
+
+lagged_x <- flags_train %>% 
+  select(x)
+
+lagged_y <- flags_train %>% 
+  select(y)
+
+lagged_xy <- flags_train %>% 
+  select(x, y)
+```
+
+
+
+```{r}
+library(reticulate)
+```
+
+
+
+```{python}
+import pandas
+# from keras.models import Sequential
+from keras.layers import Input, Dense
+from keras.models import Model
+
+from keras.wrappers.scikit_learn import KerasRegressor
+from sklearn.model_selection import cross_val_score
+from sklearn.model_selection import KFold
+from sklearn.preprocessing import StandardScaler
+from sklearn.pipeline import Pipeline
+from sklearn.metrics import accuracy_score
+
+# Set a seed for replication
+seed = 1
+```
+
+
+```{python}
+independant_variables = r.lagged_independant.values
+dependant = r.lagged_xy.values
+dependant_x = r.lagged_x.values
+dependant_y = r.lagged_y.values
+print(independant_variables)
+
+X = independant_variables
+X_test = r.lagged_independant_test.values
+Y = dependant
+Y_x = dependant_x
+Y_y = dependant_y
+
+```
+
+```{python}
+X.shape
+Y.shape
+Y_x.shape
+Y_y.shape
+```
+
+
+
+```{python}
+def individual_nn():
+  input_layer = Input(shape = (25, ))
+  x = Dense(16, activation='relu')(input_layer)
+  x = Dense(8, activation='relu')(x)
+  outputs = Dense(1, activation = "linear")(x)
+  model = Model(inputs = input_layer, outputs = outputs)
+  model.compile(loss = "mse", optimizer = "adam")
+  return model
+  
+def multi_nn():
+  input_layer = Input(shape = (24, ))
+  x = Dense(16, activation='relu')(input_layer)
+  x = Dense(8, activation='relu')(x)
+  outputs = Dense(2, activation = "linear")(x)
+  model = Model(inputs = input_layer, outputs = outputs)
+  model.compile(loss = "mse", optimizer = "adam")
+  return model
+```
+
+# Note: 
+I think what I need to do is to find a better framework for evaluating these Neural Networks. The negativs MSE is seeming kind of strange to me and I'm not sure really what to do with it. 
+# Evaluating Neural Networks
+
+```{python}
+x_nn = individual_nn()
+x_nn.fit(X, Y_x)
+```
+
+```{python}
+y_nn = individual_nn()
+x_nn.fit(X, Y_y)
+```
+
+```{python}
+xy_nn = multi_nn()
+xy_nn.fit(X, Y)
+```
+
+
+
+```{python}
+predictions = xy_nn.predict(X_test)
+```
+
+
+```{r}
+predictions <- py$predictions %>% 
+  as_tibble() %>% 
+  set_names(c("x", "y"))
+
+ground_truth <- flags_test %>% 
+  select(c(x, y))
+
+x_mse <- mean((ground_truth$x - predictions$x)^2)
+y_mse <- mean((ground_truth$y - predictions$y)^2)
+total_mse <- mean(c(x_mse, y_mse))
+glue::glue("MSE Results: x = {round(x_mse)}, y = {round(y_mse)}, total = {round(total_mse)}")
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<!-- # Simultaneous Co-ord Output -->
+
+
+
+<!-- ```{python} -->
+<!-- estimator = KerasRegressor(build_fn=multi_nn, nb_epoch=1000, batch_size=100, verbose=False) -->
+<!-- kfold = KFold(n_splits=3, random_state=seed) -->
+<!-- results = cross_val_score(estimator, X, Y, cv=kfold) -->
+<!-- print("Results: %.2f (%.2f) MSE" % (results.mean(), results.std())) -->
+
+<!-- estimator.fit(X, Y) -->
+<!-- prediction = estimator.predict(X) -->
+<!-- ``` -->
+
+<!-- # Independant Co-ord Output -->
+
+<!-- ```{python} -->
+<!-- estimator = KerasRegressor(build_fn=individual_nn, nb_epoch=1000, batch_size=100, verbose=False) -->
+<!-- kfold = KFold(n_splits=3, random_state=seed) -->
+<!-- results = cross_val_score(estimator, X, Y_x, cv=kfold) -->
+<!-- print("Results: %.2f (%.2f) MSE" % (results.mean(), results.std())) -->
+
+<!-- estimator.fit(X, Y_x) -->
+<!-- prediction = estimator.predict(X) -->
+<!-- ``` -->
+
+<!-- ```{python} -->
+<!-- estimator = KerasRegressor(build_fn=individual_nn, nb_epoch=1000, batch_size=100, verbose=False) -->
+<!-- kfold = KFold(n_splits=3, random_state=seed) -->
+<!-- results = cross_val_score(estimator, X, Y_y, cv=kfold) -->
+<!-- print("Results: %.2f (%.2f) MSE" % (results.mean(), results.std())) -->
+
+<!-- estimator.fit(X, Y_y) -->
+<!-- prediction = estimator.predict(X) -->
+<!-- ``` -->
+
+
+<!-- # Notes on Individual vs Combined -->
+
+<!-- It seems that the individual neural network predicting for the y variable is the most accurate. This is followed by the combined output and finally the x output. This may be because the y value has a much smaller range for predictions, and therefore there is a much smaller scope for errors. This means that the combined prediction may actually be a near perfect combination of the two individual inputs, as the mean of these results would pull the error of the x down and the error of the y up. -->
+
+<!-- **The input data needs to be scaled and standardised.** -->
+
+<!-- ```{r} -->
+<!-- library(tidymodels) -->
+<!-- ``` -->
+
+
+<!-- ```{r} -->
+<!-- nn_recipe <- lagged_data %>%  -->
+<!--   recipe() %>%  -->
+<!--   update_role(starts_with("flag"), new_role = "predictor") %>%  -->
+<!--   update_role(x, y, new_role = "outcome") %>%  -->
+<!--   step_center(everything()) %>%  -->
+<!--   step_scale(everything()) -->
+
+<!-- processed_data <- nn_recipe %>%  -->
+<!--   prep() %>%  -->
+<!--   juice() -->
+
+<!-- lagged_independant <- processed_data %>%  -->
+<!--   select(-c(x, y))  -->
+
+
+<!-- lagged_x <- processed_data %>%  -->
+<!--   select(x) -->
+
+<!-- lagged_y <- processed_data %>%  -->
+<!--   select(y) -->
+
+<!-- lagged_xy <- processed_data %>%  -->
+<!--   select(x, y) -->
+<!-- ``` -->

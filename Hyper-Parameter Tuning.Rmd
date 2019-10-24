@@ -1,0 +1,228 @@
+---
+title: "Hyper-Parameter Tuning"
+author: "James Monks"
+date: "20/10/2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(reticulate)
+fs::dir_map(here::here("R"), source)
+set.seed(1)
+```
+
+# Set up Hyper Parameters to try 
+```{r}
+sample_num_neurons <- sample(50:1000, 30)
+sample_num_h_layers <- sample(1:5, replace = TRUE, size = 30)
+
+prop_per_layer <- 
+  sample_num_h_layers %>% 
+  map(~{
+    raw_numbers <- runif(.x)
+    proportions <- raw_numbers/sum(raw_numbers)
+  })
+
+
+```
+
+```{r}
+nodes_in_layers <- 
+  map2(sample_num_neurons, prop_per_layer, ~{
+    ceiling(.x*.y)
+  })
+```
+
+```{r}
+param_list <- list(prop_per_layer = prop_per_layer, sample_num_h_layers = sample_num_h_layers, sample_num_neurons = sample_num_neurons, nodes_in_layers)
+
+param_list %>% 
+  write_rds(here::here("Results Data", "Parameters_for_hyperparameter_tuning.rds"))
+
+```
+
+
+# Read Data
+```{r}
+# train_raw <- read_all_games(8, line = TRUE)
+
+train_raw <- readr::read_rds(here::here("data", "train_data.rds"))
+
+train_lagged <- train_raw %>% 
+  select(starts_with("flag")) %>% 
+  mutate_all(dplyr::lag) %>% 
+  rename_all(~paste0(., "_lagged_1")) %>% 
+  bind_cols(train_raw) %>% 
+  na.omit()
+
+# test_raw <- read_all_games(10, from_game = 9, line = TRUE)
+test_raw <- readr::read_rds(here::here("data", "test_data.rds"))
+
+test_lagged <- test_raw %>% 
+  select(starts_with("flag")) %>% 
+  mutate_all(dplyr::lag) %>% 
+  rename_all(~paste0(., "_lagged_1")) %>% 
+  bind_cols(test_raw) %>% 
+  na.omit()
+```
+
+# Process Data
+```{r}
+library(tidymodels)
+
+input_rec <- recipe(x + y ~ ., data = train_lagged) %>% 
+  step_scale(all_predictors()) %>% 
+  step_center(all_predictors()) %>% 
+  step_rm(game) %>% 
+  step_rm(number_time)
+
+input_prepped <- input_rec %>% 
+  prep(retain = TRUE)
+
+
+flags_train <- input_prepped %>% 
+  bake(train_lagged)
+
+flags_test <- input_prepped %>% 
+  bake(test_lagged)
+
+independant_variables <- flags_train %>% 
+  select(-c(x, y))
+
+dependant_variables <- flags_train %>% 
+  select(x, y)
+
+testing_variables <- flags_test %>% 
+  select(-c(x, y))
+```
+
+
+
+```{python}
+import pandas
+# from keras.models import Sequential
+from keras.layers import Input, Dense
+from keras.models import Model
+
+from keras.wrappers.scikit_learn import KerasRegressor
+from sklearn.model_selection import cross_val_score
+from sklearn.model_selection import KFold
+from sklearn.preprocessing import StandardScaler
+from sklearn.pipeline import Pipeline
+from sklearn.metrics import accuracy_score
+
+# Set a seed for replication
+seed = 1
+```
+
+```{python}
+X = r.independant_variables.values
+X_test = r.testing_variables.values
+
+Y = r.dependant_variables.values
+```
+
+```{python}
+input_layer = Input(shape = (24, ))
+```
+
+```{python}
+model_list = []
+
+for network in r.nodes_in_layers:
+  print(network)
+  if isinstance(network, float): 
+    network = [network]
+  for layer in network:
+    if layer == network[0]:
+      x = Dense(int(layer), activation='relu')(input_layer)
+    else:
+      x = Dense(int(layer), activation='relu')(x)
+  outputs = Dense(2, activation = "linear")(x)
+  tmp_model = Model(inputs = input_layer, outputs = outputs)
+  model_list.append(tmp_model)
+
+
+# for model in model_list: 
+#   len(model.layers)
+
+```
+
+```{python}
+for model in model_list:
+  model.compile(loss = "mse", optimizer = "adam")
+```
+
+```{python}
+# for model in model_list:
+  # model.fit(X, Y, batch_size=100, epochs=10, validation_split=0.3)
+```
+
+```{python}
+predictions = []
+for model in model_list:
+  tmp_pred = model.predict(X_test)
+  predictions.append(tmp_pred)
+```
+
+
+```{python}
+predictions[5]
+```
+
+```{r}
+prediction_data <- py$predictions %>% 
+  map(as_tibble) %>% 
+  map(set_names, c("x", "y"))
+```
+
+
+```{r}
+prediction_data %>% 
+  write_rds(here::here("Results Data", "30_network_hyperparameter_data.rds"))
+```
+
+
+```{r}
+
+ground_truth <- flags_test %>% 
+  select(c(x, y))
+
+write_rds(ground_truth, here::here("Results Data", "ground_truth.rds"))
+
+prediction_data
+
+total_mses <- prediction_data %>% 
+  map(~{
+    x_mse <- mean((ground_truth$x - .x$x)^2)
+    y_mse <- mean((ground_truth$y - .x$y)^2)
+    # x_mse <- mean((ground_truth$x - .x$x)^2, na.rm = TRUE)
+    # y_mse <- mean((ground_truth$y - .x$y)^2, na.rm = TRUE)
+    total_mse <- sum(c(x_mse, y_mse))
+    return(total_mse)
+  })
+
+
+
+total_mses %>% lift(min)()
+
+total_mses %>% which.min()
+
+param_list %>% 
+  map(6)
+
+predictions <- prediction_data %>% 
+  pluck(6)
+
+
+
+x_mse <- mean((ground_truth$x - predictions$x)^2)
+y_mse <- mean((ground_truth$y - predictions$y)^2)
+
+total_mse <- sum(c(x_mse, y_mse))
+glue::glue("MSE Results: x = {round(x_mse)}, y = {round(y_mse)}, total = {round(total_mse)}")
+
+```
+
