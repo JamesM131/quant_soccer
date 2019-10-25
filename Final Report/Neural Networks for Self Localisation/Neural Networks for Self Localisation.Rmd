@@ -2,18 +2,18 @@
 # Change the title etc. to your needs:
 title: "Neural Networks for Self Localisation and Agent Positioning"
 subtitle: "An Application to RoboCup Data"
-author: "James Monks and Nathan Villalobos"
+author: "James Monks"
 course: 'Western Sydney University: 200045 Quantitative Project'
 #logo: examples/logo.png  # insert path to your logo
 referee: 'Supervisor: Oliver Obst'
 
 
 abstract: |
-  Yart provides an RMarkdown template for rendering TeX based PDFs. It provides a format suitable for academic settings. The typical RMarkdown variables may be used. In addition, some variabels useful for academic reports have been added such as name of referee, due date, course title, field of study, addres of author, and logo, and a few more maybe. In addition, paper format (eg., paper size, margins) may be adjusted; the babel language set of Latex is supported. Those variables are defined in the yaml header of the yart document. Adjust those variables to your need. Note that citations, figure/ table referencing is possible due to the underlying pandoc magic. This template is not much more than setting some of the variables provided by rmarkdown (pandoc, knitr, latex, and more), credit is due to the original authors. Please reade the rmarkdown documentation for detailled information on how to use rmarkdown and how to change settings.
+  This report examines RoboCup soccer simulation data in the context of common simulated agent problems, with the view to use machine learning methods to address them. Specifically, the localisation of simulated agents is addressed utilising the landmark data that falls within an agents field of view to predict for their coordinates on the field at any given point in time. A number of different neural network models are trained to generate these predictions and are compared to a baseline model that uses geometry to make predictions. It is concluded that the neural networks are much more accurate than the geometric model in every case, with the best performing neural network achieving an accuracy that would likely be suitable for implementation in a production environment. 
   
 
 # Insert/Change name of bibliogrphic files:
-#bibliography: examples/bib.bib
+bibliography: final_report.bib
 #csl: examples/apa6.csl  # citation style file
 
 
@@ -29,8 +29,8 @@ classoption:
   - oneside
   #- more options here, see rmarkdown documentation 
 lang: en
-lof: yes
 toc: yes
+lof: yes
 numbersections: yes
 UP_title: yes
 UP_subtitle: yes
@@ -48,24 +48,26 @@ fs::dir_map(here::here("R"), source)
 ```
 
 # Introduction
+
 ## RoboCup
-RoboCup is an international competition in which teams prepare artificial football teams to compete against each other and  was originally conceived in (SOME YEAR HERE) as a competition to drive forward research in robotics and artificial intelligence systems. Different leagues have since been established that are devoted to improving specific aspects of these fields. The large scale robotics league is designed to drive competition in macro movements in large robots. The small scale robots drive work into improving finer movements in smaller scale robots. The standard platform is a league in which all contestants use the same robots, and is designed to showcase the ability of a team to program for robot movement. The final major league and the one that this report focuses on is the simulation league.  This league is not linked to any physical robot and as a result is much more accessible to teams. It allows teams to focus solely on the artificial intelligence aspect of the problem, and allows for a prototyping platform for teams to trial different AI approaches before integrating them with physical robots. 
+
+RoboCup is an international competition in which teams prepare artificial football teams to compete against each other and  was originally held in (1997) as a competition to drive forward research in robotics and artificial intelligence systems. Different leagues have since been established that are devoted to improving specific aspects of these fields [@robocup_site]. The large scale robotics league is designed to drive competition in macro movements in large robots. The small scale robots drive work into improving finer movements in smaller scale robots. The standard platform is a league in which all contestants use the same robots, and is designed to showcase the ability of a team to program for robot movement. The final major league and the one that this report focuses on is the simulation league. This league is not linked to any physical robot and as a result is much more accessible to teams. It allows teams to focus solely on the artificial intelligence aspect of the problem, and allows for a prototyping platform for teams to trial different AI approaches before integrating them with physical robots.
 
 ## RoboCup Simulation Data
-The simulation league of RoboCup takes place on a field of play that is x units wide and y units high The field of play is enclosed within a slightly larger region that represents the range of the possible simulated positions. This can be viewed as an exterior boundary on a regular field. It should also be noted that the simulated players will be referenced throughout the report as agents in order to follow convention. 
 
-The agents are placed on the field with a limited field of view in which they perceive other agents, the ball and landmarks with a known location. These landmarks allow the agent to have some idea of where they are on the field without having absolute internal knowledge of their coordinates and will be key to the project goals. The use of these landmarks will be discussed more in section (SOMETHING)
+The simulation league of RoboCup takes place on a field of play that is 105m wide and 68m units high The field of play is enclosed within a slightly larger region that represents the range of the possible simulated positions (120m x 80m). This can be viewed as an exterior boundary on a regular field. It should also be noted that the simulated players will be referenced throughout the report as agents in order to follow convention. [@dataset_creation]
 
-The main source of data - considered here as 'percieved data’ - that is generated by each agent in the simulation is split up into 2 categories. The first is the landmarks category, which contains the relative distances and angles from the agent that fall within the field of view. These landmarks include the lines of the field, goalposts, the corners of the lines and simulated points around the exterior boundary. The second category of data contains information about all entities on the field that are moving and within the field of view. These entities consist of agents from both teams and the ball; as this perception data is generated by one agent about other agents, the agent that generates the data will be known as the observer agent or simply the observer. Agents that are close to the observer and within the field of view have both their team and number known, however, agents that are far away from the observer may not have their number or even their team know (then denoted as an ‘unknown agent’).
+The agents are placed on the field with a limited field of view in which they perceive other agents, the ball and landmarks with a known location. These landmarks allow the agent to have some idea of where they are on the field without having absolute internal knowledge of their coordinates and will be key to the project goals. The use of these landmarks will be discussed more in section ()
 
- It should be noted that for all forms of perception data, there is a perception error factor that is proportional in some way to the distance of the entity from the observer. The exact process by which this occurs is unknown, however it is included to imitate the uncertainty that regular football players have when estimating distances. 
+The main source of data - considered here as 'perceived data’ - that is generated by each agent in the simulation is split up into 2 categories [@dataset_creation]. The first is the landmarks category, which contains the relative distances and angles from the agent that fall within the field of view. These landmarks include the lines of the field, goalposts, the corners of the lines and simulated points around the exterior boundary. The second category of data contains information about all entities on the field that are moving and within the field of view. These entities consist of agents from both teams and the ball; as this perception data is generated by one agent about other agents, the agent that generates the data will be known as the observer agent or simply the observer. Agents that are close to the observer and within the field of view have both their team and number known, however, agents that are far away from the observer may not have their number or even their team know (then denoted as an ‘unknown agent’).
+
+It should be noted that for all forms of perception data, there is a perception error factor that is proportional in some way to the distance of the entity from the observer. The exact process by which this occurs is unknown, however it is included to imitate the uncertainty that regular football players have when estimating distances.[@robocup_manual]
 
 In addition to the perception data, there are also 2 higher level data sets. The ground-truth data set contains the exact location for every player and the ball at each time point in a game. There is only one of these files for each game and they are treated as a reference for conditions that are known to be true. There is also the landmarks data that is a universal file that describes the exact coordinates of the observable landmarks in a game and is the same for every game. The ground-truth data is only accessible to teams after the game has been played, whereas the landmarks data is public and known to the teams throughout the play. 
 
+The data perception data contains a high number of NaN records, as it is structured as one observation for each iteration in time and one variable for each metric (e.g. distance) on each entity (e.g. flag). This results in these NaN records as the majority of the entities on the field are not in the field of view of any given agent, and as such there is no reasonable value to assign except for NaN. This means that the data needs to be extensively cleaned before the modelling process can begin. This data cleaning is done differently for different methods, but generally consists of obtaining only the closest couple of flags and dropping the other variables for any given point in time. An excerpt from a perception landmarks data can be seen below:
 
-The data perception data contains a high number of NaN records, as it is structured as one observation for each iteration in time and one variable for each metric (e.g. distance) on each entity (e.g. flag). This results in these NaN records as the majority of the entities on the field are not in the field of view of any given agent, and as such there is no reasonable value to assign except for NaN. This means that the data needs to be extensively cleaned before the modelling process can begin. This data cleaning is done differently for different methods, but gernerally consists of obtaining only the closest coulple of flags and dropping the other variables for any given point in time. An excerpt from a perception landmarks data can be seen below:
-
-```{r message=TRUE, warning=FALSE}
+```{r message=FALSE, warning=FALSE}
 read_csv(here::here("data-raw", "Evaluation-Games", "1-HELIOS2017-vs-FRA-UNIted", "20170905202300-HELIOS2017_2-vs-FRA-UNIted_0-FRA-UNIted_1-landmarks.csv")) %>% 
   slice(66:76) %>% 
   select(1:6) %>% 
@@ -75,8 +77,10 @@ read_csv(here::here("data-raw", "Evaluation-Games", "1-HELIOS2017-vs-FRA-UNIted"
 
 
 ## Quantitative Project Goals
+
 ### Self Localisation
-This project aims to determine if it is possible to use neural networks to create an accurate prediction of an agent’s own place on the field based on the information available to them. In cases in which there are 2 or more landmarks in the field of view of an agent, it is possible to use geometry to determine the theoretically exact coordinates of the agent. The issue with this as mentioned in section (SOMETHING) is that there is perception error associated with these observations. This project specifically aims to determine if it is possible to use neural networks to improve on the predictions of on field locations made through the geometric method. 
+
+This project aims to determine if it is possible to use neural networks to create an accurate prediction of an agent’s own place on the field based on the information available to them. In cases in which there are 2 or more landmarks in the field of view of an agent, it is possible to use geometry to determine the theoretically exact coordinates of the agent. The issue with this as mentioned in section 1.2 is that there is perception error associated with these observations. This project specifically aims to determine if it is possible to use neural networks to improve on the predictions of on field locations made through the geometric method. 
 
 ## Background Theory
 
@@ -84,25 +88,30 @@ This project aims to determine if it is possible to use neural networks to creat
 
 Typical feed forward neural networks are made out of a series of layers of that are designed to capture key predictors of the outcome variables. Each layer consists of a number of nodes, which perform some transformation on input data, before passing the data on to the next layer. In subsequent layers, the value passed to each node is a weighted sum of all nodes in the previous layer, with each connection between nodes being assigned a weight. The input layer corresponds to the input variables, then there are a number of hidden layers that are connected, and finally an output layer with the same number of nodes as desired predictions. In the case of predicting the coordinates of an agent on the field, this would be 2 nodes.
 
-This layering process allows for important interactions between the predictor variables to be identified. Weights are trained across layers to optimise for the loss function, which in turn creates smaller groups of nodes that operate together which implies an interaction between input variables. This can also be seen as an identification of latent or confounding variables that were not directly observed, but have a strong influence on the outcome. Unfortunately, though neural networks excel at identifying interactions and latent variables, the exact nature of these interactions and variables is opaque, due to the complex interwoven node structure. This is what is meant when neural networks are referred to as ‘black box algorithms’ (reference) 
+This layering process allows for important interactions between the predictor variables to be identified. Weights are trained across layers to optimise for the loss function, which in turn creates smaller groups of nodes that operate together which implies an interaction between input variables. This can also be seen as an identification of latent or confounding variables that were not directly observed, but have a strong influence on the outcome. Unfortunately, though neural networks excel at identifying interactions and latent variables, the exact nature of these interactions and variables is opaque, due to the complex interwoven node structure. This is what is meant when neural networks are referred to as ‘black box algorithms’. [@nn_advantages].
+
+Weights on the connections between nodes are the parameters of the neural network that are optimised. They can be  viewed in a similar way to the coefficients of terms in a linear regression. These weights are updated through a process known as back propagation. Back propagation works by computing the gradient of the cost produced with the current set and updates the weights accordingly as described by [@backprop_hinton]. This is not as simple as in linear regression however, as the weights and values produced by them are functions of each previous layer. Back propagation works by applying the chain rule to each of the steps in the network progressively to work out how each individual weight needs to be updated. This is formalised below:
 
 
+\begin{gather*}
+\delta^L = \nabla_a C \odot g^{L'}(z^L) \\
+\delta^l = ((w^{l+1})^{T}\delta^{l+1}) \odot g^{l'}(z^l) \\
+\frac{\delta C}{\delta b^{l}_j} = \delta^{l}_j \\
+\frac{\delta C}{\delta w^{l}_{jk}} = a^{l-1}_k \delta^{l}_j
+\end{gather*}
 
-Weights on the connections between nodes are the parameters of the neural network that are optimised. They can be  viewed in a similar way to the coefficients of terms in a linear regression. These weights are updated through a process known as back propagation. Back propagation works by computing the gradient of the cost produced with the current set and updates the weights accordingly (reference). This is not as simple as in linear regression however, as the weights and values produced by them are functions of each previous layer. Back propagation works by applying the chain rule to each of the steps in the network progressively to work out how each individual weight needs to be updated. This is formalised below:
 
-* **Vector Equation**
+Where \( \nabla_a C \) a vector of variation of the cost \(C\) relative to the output of the network \(a_i^L\), which is \(\frac{\delta C}{\delta a_i^L}\). Also \(\odot\) represents element-wise matrix multiplication. This algorithm was described and explained in this form by [@backprop_medium].
 
-A key aspect of back propagation that should be noted is that the way in which the weights are updated uses a process known as gradient descent. At a high level, this process uses the gradient of the loss function obtained to update the weights in the direction of the gradient. This process is performed iteratively in order to converge on a local minima on the loss function. There are a number of iterations on this method as the obtained local minima is not necessarily the minimum point of the loss function such as stochastic gradient descent. (Reference)
-
-
-### Comparison of Geometry and Neural Networks -> Discussion
+A key aspect of back propagation that should be noted is that the way in which the weights are updated uses a process known as gradient descent. At a high level, this process uses the gradient of the loss function obtained to update the weights in the direction of the gradient. This process is performed iteratively in order to converge on a local minima on the loss function. There are a number of iterations on this method as the obtained local minima is not necessarily the minimum point of the loss function such as stochastic gradient descent [@stochastic_descent].
 
 ### Training, Validation and Testing Data
 
-The data that will be used for training neural networks and assessing the results is sourced from the HELIOS_2017 team’s games in the 2017 RoboCup. The group behind the HELIOS_2017 team are known to produce high quality simulation teams, as they consistent win the world championships or if not, come close. The data consists of 5 games repeated a number of times, with the first 2 rounds from each game being taken (resulting in 10 total matches). This data will be broken down into training and testing data sets in order to avoid overfitting models to data and to obtain a fair assessment of model accuracy. The first 4 games (8 matches) will be used to train the models and then the last game (2 matches) will be predicted for. The data has been broken into games in this way as it is important for the player positioning portion of this project to not only prevent overfitting on the training data in general, but also to avoid overfitting for opposing teams, hence, a brand new team is needed in order to obtain a fair assessment.
+The data that will be used for training neural networks and assessing the results is sourced from the HELIOS_2017 team’s games in the 2017 RoboCup. The group behind the HELIOS_2017 team are known to produce high quality simulation teams, as they consistent win the world championships or if not, come close. The data consists of 5 games repeated a number of times, with the first 2 rounds from each game being taken (resulting in 10 total matches). This data will be broken down into training and testing data sets in order to avoid over-fitting models to data and to obtain a fair assessment of model accuracy. The first 4 games (8 matches) will be used to train the models and then the last game (2 matches) will be predicted for. The data has been broken into games in this way as it is important for the player positioning portion of this project to not only prevent over-fitting on the training data in general, but also to avoid over-fitting for opposing teams, hence, a brand new team is needed in order to obtain a fair assessment.
 
-## Previous Work/Literature
-* Kalman filters?
+## Related Work
+
+Robot localisation is an essential field for any form of automated robotic systems. This is particularly important in the case of self driving cars for example, as extremely accurate locations are needed to prevent accidents. This field has hence undergone research into a number of different methods approaching this problem. One such method is the use of kalman filters which take measurements that have uncertainty in them and updates them with prediction information generated from environmental generation. This process combines uncertainties in order to create a more accurate prediction subject to a lower degree of error. This is particularly useful in instances in which their is a gps system connected to the robot that is subject to an error. This has been demonstrated effectively by [@kalman_robots], however, it is not applicable to the project in question as there is not this inherent measurement available.
 
 
 ## Geometric Applications
@@ -137,7 +146,7 @@ For known coordinates:
 
 \(C = (1,0)\)
 
-```{r echo=FALSE, fig.cap="Demonstration of Geometric Application"}
+```{r one, echo=FALSE, fig.cap="Demonstration of Geometric Application"}
 test_triangle <- tibble(
   x = c(0, 0, 1, 0),
   y = c(0, 1, 0, 0), 
@@ -181,7 +190,7 @@ tibble(x = 7.926704e-08, y = -0.0003981634) %>%
 This result is extremely close to the stated point. It is not exactly the same likely due to some internal rounding inconsistencies, but is close enough to be acceptable as a true predictor. 
 
 
-This process represents a reframing of the relative coordinate system centred on the player to an absolute coordinate system centred on one of the two flags, which makes it a much easier problem to solve. The remaining problem however, is that the perception error in both distance measurements and angle measurements accumulate throughout the estimation. 
+This process represents a re-framing of the relative coordinate system centred on the player to an absolute coordinate system centred on one of the two flags, which makes it a much easier problem to solve. The remaining problem however, is that the perception error in both distance measurements and angle measurements accumulate throughout the estimation. 
 
 Utilising the geometric prediction algorithm outlined above, predictions have been made for the testing data set (predicting for the training data set is not needed as only the testing data set is used for model comparison).  The results of this prediction can be seen below. 
 
@@ -200,38 +209,37 @@ geo_results_only %>%
 ```
 
 
-This error is very high, despite the fact that this algorithm has been both mathematically and empirically shown to identify the agent’s coordinates. This error then must be the result of the perception error that  is proportional to the distance as discussed in (something??). This is a problem as the geometric solution to coordinate prediction results in multiplying these terms that have some error component together a number of times, which creates an error term raised to the power of the number of multiplications. When noting that this is exacerbated by the proportionality to the distance, it is reasonable to obtain results such as above. 
+This error is very high, despite the fact that this algorithm has been both mathematically and empirically shown to identify the agent’s coordinates. This error then must be the result of the perception error that  is proportional to the distance as discussed in 1.2. This is a problem as the geometric solution to coordinate prediction results in multiplying these terms that have some error component together a number of times, which creates an error term raised to the power of the number of multiplications. When noting that this is exacerbated by the proportionality to the distance, it is reasonable to obtain results such as above. 
 
 
 # Methods
+
 ## Applying a Neural Network to the same data as the Geometric Solution
+
 The geometric solution to the problem of self-localisation has been obtained and is theoretically a perfect solution. This is not the case however, due to the perception error that is introduced by Robocup's simulation engine and as such the solution is as close as possible to the correct location. This means that this is the theoretical limit of accuracy for a neural network given the exact same input data. That is to say that given enough data, the function that the neural network begins to approximate, should be a good estimation of the geometric solution described above. If this is not the case and the neural network predicts the location of the agent better than the geometric solution, then there must be some form of systematic error being introduced by the perception error (as opposed to random error).
 
 It is simple to apply the neural network to the same data as the geometric application, as inputs and outputs are of the same shape. There are some cases in which players can see less than two flags, and these cases are filtered as to not introduce any errors.
 
-The network is sturcutred with 8 nodes in the input layer (4 for each of the flags). The inofmation used about the flags is the distance, angle, real x coordinate and real y coordinate. Including the real x and y coordinates of the flags allows the neural network to form relative associations between variables, rather than encoding every flag as a variable with 0 for information if it is not being included. There are 2 hidden layers 2 with 6 and 4 nodes respectively. The output layer consists of 2 nodes for an x coordinate and a y coordinate. 
+The network is structured with 8 nodes in the input layer (4 for each of the flags). The information used about the flags is the distance, angle, real x coordinate and real y coordinate. Including the real x and y coordinates of the flags allows the neural network to form relative associations between variables, rather than encoding every flag as a variable with 0 for information if it is not being included. There are 2 hidden layers 2 with 6 and 4 nodes respectively. The output layer consists of 2 nodes for an x coordinate and a y coordinate. 
 
 ## Applying a Neural Network to data with more inputs
 
-The benefit of applying neural networks to this problem is that multiple inputs can be used to estimate the location of a player. This is helpful, as this can allow the perception error to be minimised, along with the possibility of unknown relationships in the data being identified and allowed for. It is for this reason that additional inputs will be added to predict for the same locations. To demonstrate this while remaining inside the scope of the the report and to obserce the possible improvements, there will be 3 flags used instead of 2. This means that there will be 12 nodes in the input layer, then 8 and 4 nodes in each of the hidden layers.
+The benefit of applying neural networks to this problem is that multiple inputs can be used to estimate the location of a player. This is helpful, as this can allow the perception error to be minimised, along with the possibility of unknown relationships in the data being identified and allowed for. It is for this reason that additional inputs will be added to predict for the same locations. To demonstrate this while remaining inside the scope of the the report and to observe the possible improvements, there will be 3 flags used instead of 2. This means that there will be 12 nodes in the input layer, then 8 and 4 nodes in each of the hidden layers.
 
-An important note here is that in general, neural networks require a uniform input and shape to work effectively. This means that the NaN values in the data can cause errors that break down the predictions provided by the neural network. This is an issue, as depending on the agent's position and orientation on the field, there are instances where very few flags are obserced. It is for this reason that only the observations in the data in which the obserced number of flags is greater than or equal to the required inputs for the neural network. In this case this only observations in which an agent sees at least 3 flags will be included. 
+An important note here is that in general, neural networks require a uniform input and shape to work effectively. This means that the NaN values in the data can cause errors that break down the predictions provided by the neural network. This is an issue, as depending on the agent's position and orientation on the field, there are instances where very few flags are observed. It is for this reason that only the observations in the data in which the observed number of flags is greater than or equal to the required inputs for the neural network. In this case this only observations in which an agent sees at least 3 flags will be included. 
 
 
 ## Neural Networks with Other Types of Inputs
 
-Neural networks are not limited to including only one kind of predictor variable in the modelling process. This is beneficial as different types of data may provide different kinds of information in making predictions. The point flags that have been used as predictors so far are not the only kind of landmark available, the exterior lines of the field that are in view are included in the landmark data set as well. This has the potetnital to be informative of the position and orientation of a player more broadly. 
+Neural networks are not limited to including only one kind of predictor variable in the modelling process. This is beneficial as different types of data may provide different kinds of information in making predictions. The point flags that have been used as predictors so far are not the only kind of landmark available, the exterior lines of the field that are in view are included in the landmark data set as well. This has the potential to be informative of the position and orientation of a player more broadly. 
 
 In order to include the lines in the neural network, an additional 6 variables need to be included. These variables include: the distance from the agent to the line; the angle made between the agent's direct orientation and the line; and four variables encoding which line it was (i.e. top, right, bottom, left). These line variables are one-hot-encoded meaning that only one of the variables is assigned a 1 indicating which line is in sight for each observation while the others have 0. This increase to 18 nodes in the input layer leads to the nodes in the hidden layers to increase to 12 and 6 respectively.
 
 ## Neural Networks with Lagged Inputs
-The position at which the agent was previously in would be an extremely good predictor for their current location theoretically, however there are a number of problems with including this. The initally obvious problem is that the actual location at the previous time increment is not available, only a prediction that is made using this same method. This would mean relying on predictions that have been made that recursively rely on other predictions made since the begining of the game. If the actual previous location is presumed to be known perfectly, there is still an issue with including such a predictor, as if the neural network makes a prediction that is the same as the previous location, the loss function will be very low, however, this then assumes that there is no movement which is not true. There is also the issue that no movement or velocity information is captured in this information, only the previous state of the agent. 
 
-A better way to include knonw prior (or lagged) information is to include the prior observations of all of the inputs. This means that there is no assumed perfect knowledge, as the observed distances and angles are always known to the agent. It also means that there is no predictor that would overpower the others in terms of weighting of relevant information. There is also the subtler encoding of both the direction and speed of movement through these lagged observations, through observing how much the distance and angle to each flag changes in each time step. This results in 30 nodes in the input layer, with 20 and 10 nodes in each of the hidden layers.
+The position at which the agent was previously in would be an extremely good predictor for their current location theoretically, however there are a number of problems with including this. The initially obvious problem is that the actual location at the previous time increment is not available, only a prediction that is made using this same method. This would mean relying on predictions that have been made that recursively rely on other predictions made since the beginning of the game. If the actual previous location is presumed to be known perfectly, there is still an issue with including such a predictor, as if the neural network makes a prediction that is the same as the previous location, the loss function will be very low, however, this then assumes that there is no movement which is not true. There is also the issue that no movement or velocity information is captured in this information, only the previous state of the agent. 
 
-
-<!-- ## Refined Neural Network -->
-<!-- The results of each of the neural networks will be examined and a refined final neural network will be produced. This will incluse the best possible group of input variables given the scope of the previous neural networks and will be the model that is deemed to be the best. This will then be compared to the geometric results (along with other neural networks) in order to assess the results in the context of the research question.  -->
+A better way to include known prior (or lagged) information is to include the prior observations of all of the inputs. This means that there is no assumed perfect knowledge, as the observed distances and angles are always known to the agent. It also means that there is no predictor that would overpower the others in terms of weighting of relevant information. There is also the subtler encoding of both the direction and speed of movement through these lagged observations, through observing how much the distance and angle to each flag changes in each time step. This results in 30 nodes in the input layer, with 20 and 10 nodes in each of the hidden layers.
 
 ## Ablation Study
 
@@ -239,16 +247,20 @@ Ablation studies in machine learning are commonly performed by removing some com
 
 
 ### Applying to More Inputs and Lagged Inputs
+
 ## Hyper-parameter tuning
+
 The parameters in a feed forward neural network such as the type that are being used in this project are the weights that are applied to the connections between nodes in each layer. These weights are trained through back-propagation in order to optimise a loss function. There are however a number of higher level parameters that cannot be trained directly in this way that are referred to as hyper parameters. Examples of hyper-parameters can include the learning rate, batch size, weight initialisation, batch size and number of epochs. Some of the most important hyper-parameters however, are the number of hidden layers and the number of nodes in each of the hidden layers of the neural network. A lot of time can be spent tuning the hyper parameters and as this is not the purpose of this project, hyper-parameter tuning will only be performed on these two. 
 
-A traditional method of tuning hyper-parameters is the method of grid search, in which a list of groups of parameters are trialed and the group with the lowest loss function result are deemed to be the best. This is very computationally expensive and is flawed in that it gives equal weight to all parameters. A more efficient way (as described by something reference) is to sample all hyper parameters from a range of possible values, which leads to double (in the 2 parameter case) the number of distinct values being assessed for each parameter. This means that if one parameter is extremely influential and another is not, computational resources are not wasted looking at the same value of the influential parameter multiple times. This is the method that will be used in this project. 
+A traditional method of tuning hyper-parameters is the method of grid search, in which a list of groups of parameters are trialed and the group with the lowest loss function result are deemed to be the best. This is very computationally expensive and is flawed in that it gives equal weight to all parameters. A more efficient way described by [@sampling_hyper_params] is to sample all hyper parameters from a range of possible values, which leads to double (in the 2 parameter case) the number of distinct values being assessed for each parameter. This means that if one parameter is extremely influential and another is not, computational resources are not wasted looking at the same value of the influential parameter multiple times. This is the method that will be used in this project. 
 
 This project tunes the hyper parameters of the number of nodes in each layer and the number of layers. For the purposes of sampling, it is equally valid to view these as three parameters, i.e. the total number of nodes, the number of layers and the proportion of nodes in each layer. This has the advantage of being able to specifically set a maximum and minimum number of total nodes. These nodes are then distributed based on a sampled proportion over a number of layers. It should be noted that in some cases this proportion is extremely close to zero and when working with integers such as number of nodes, could result in a layer with 0 nodes in it. This is a structural impossibility in a neural network and will throw an error if this is attempted to be put into code, as such in these situations, one node is placed inside these layers.
 
 
 # Results
+
 ## Accuracy Tables
+
 ```{r echo=FALSE}
 results <- tibble::tibble(
   Model = c("Geometric", "2 Flag NN", "3 Flag NN", "3 Flag + Line NN", "Lagged Line NN", "Lagged Input NN", "Hyper Parameter Tuned NN"), 
@@ -277,79 +289,73 @@ tibble(Number = 1:7,
 ```
 
 
-Figures 1-4 (something-something) show the RMSE of the predictions made divided up into regions and distributed over a representationof the soccer field. Figures 1-2 show the actual location with colour representing error, while figures 3-4 show the error in each of the predicted locations (note these locations may be well outside the bounds of the field). It should also be noted that in both visualisations geometric model has been separated from the neural networks as due to the extreme values (both in terms of error and predicted location) the scales would be distorted if left togehter. (something awkward wording). These visualisations have been constructed to aid the understanding of the distribution of predictions and where the predictions are going wrong. 
+Figures 2-5 show the RMSE of the predictions made divided up into regions and distributed over a representation of the soccer field. Figures 2-3 show the actual location with colour representing error, while figures 4-5 show the error in each of the predicted locations (note these locations may be well outside the bounds of the field). It should also be noted that the geometric model has been been separated from the neural networks in the following visualisations. If all of the models were grouped in the one visualisation, the extreme values in the geometric model (both in terms of error and predicted location) would distort the scale, leaving other models to appear deceivingly good. These visualisations have been constructed to aid the understanding of the distribution of predictions and where the predictions are going wrong. 
 
 
 
-```{r out.width="100%", fig.cap="Location of Agents and Prediction Error for Geometric Model"}
+```{r two, out.width="100%", fig.cap="Location of Agents and Prediction Error for Geometric Model"}
 knitr::include_graphics(here::here("Results Plots", "actual_geometric.jpeg"))
 ```
 
 
-```{r out.width="100%", fig.cap="Location of Agents and Prediction Error"}
+```{r three, out.width="100%", fig.cap="Location of Agents and Prediction Error"}
 knitr::include_graphics(here::here("Results Plots", "actual_model.jpeg"))
 ```
 
 
-```{r out.width="100%", fig.cap="Predicted Location of the Agent and Prediction Error for Geometric Model"}
+```{r four, out.width="100%", fig.cap="Predicted Location of the Agent and Prediction Error for Geometric Model"}
 knitr::include_graphics(here::here("Results Plots", "predicted_geometric.jpeg"))
 ```
 
 
-```{r out.width="100%", fig.cap="Predicted Location of the Agent and Prediction Error"}
+```{r five, out.width="100%", fig.cap="Predicted Location of the Agent and Prediction Error"}
 knitr::include_graphics(here::here("Results Plots", "predicted_model.jpeg"))
 ```
 
 
 # Discussion
-## General Results
-It can be seen that even with only 2 flags as inputs, the neural network performs much better than the geometric solution. This performance is built on by the neural network with 3 inputs bringing the down the MSE for both the X coordinate and Y coordinate. The addition of line variables increases the MSE, which is unexpected as including these variables includes additional information for prediction and represent a different kind of information. This is discussed in more detail in section (something ablation study). The lagged neural network that included a line performs marginally better than the 3 input without any line variables in the X axis, but performs significantly worse in the Y axis. The ablation study model containing 3 flags as inputs along with the time lagged versions of these inputs performed the best. 
 
-It is interesting to note that in the geometric case, the predictions have a lower MSE in the Y direction, however, all of the neural network based approaches have a lower MSE in the X direction. This is particularly interesting when considered in the context of there being a much larger range of potential values in the X direction compared to the Y direction (something specifics here). It would normally be expected that the predictions in the Y direction would be more performant than those in the X direction for this reason. One possible explanation for this discrepancy in expectation and the results is that the direction of play tends to happen in the X direction and agents tend to be facing the oppositions goal. This means that there would likely be a much larger sample in the data of agents being oriented in the X direction and these observations would contain within them more information about their X coordinate than their Y coordinate. 
+## General Results
+
+It can be seen that even with only 2 flags as inputs, the neural network performs much better than the geometric solution. This performance is built on by the neural network with 3 inputs bringing the down the MSE for both the X coordinate and Y coordinate. The addition of line variables increases the MSE, which is unexpected as including these variables includes additional information for prediction and represent a different kind of information. This is discussed in more detail in section 2.5. The lagged neural network that included a line performs marginally better than the 3 input without any line variables in the X axis, but performs significantly worse in the Y axis. The ablation study model containing 3 flags as inputs along with the time lagged versions of these inputs performed the best. 
+
+It is interesting to note that in the geometric case, the predictions have a lower MSE in the Y direction, however, all of the neural network based approaches have a lower MSE in the X direction. This is particularly interesting when considered in the context of there being a much larger range of potential values in the X direction (-60 to 60) compared to the Y direction (-40 to 40). It would normally be expected that the predictions in the Y direction would be more performant than those in the X direction for this reason. One possible explanation for this discrepancy in expectation and the results is that the direction of play tends to happen in the X direction and agents tend to be facing the oppositions goal. This means that there would likely be a much larger sample in the data of agents being oriented in the X direction and these observations would contain within them more information about their X coordinate than their Y coordinate. 
 
 ## Discussion on Geometric Performance
 
-The geometric solution to this problem is significantly worse than any of the neural network based approaches, even the neural network that shares the same input variables. The geometric approach should theoretically be the best possible model given these inputs assuming that perception error is only dependant on distance. There are two possible reasons for this to not be true. The first is the possibility of some form of systematic behaviour in the error term in perception error that is being learned by the neural network. This should be investigated, because if this is the case, allowances could be made for this in the geometric calculations. The second is that the neural network may have learned a function that involved significantly less multiplication of terms that contain error. As discussed in (something.something) repeated multiplication leads to an error term that is proportional to the distance with a high degree. It is likely that this is not the method with the fewest instances of multiplication, or that there is a better way to implement this method that has been learned by the model. 
+The geometric solution to this problem is significantly worse than any of the neural network based approaches, even the neural network that shares the same input variables. The geometric approach should theoretically be the best possible model given these inputs assuming that perception error is only dependent on distance. There are two possible reasons for this to not be true. The first is the possibility of some form of systematic behaviour in the error term in perception error that is being learned by the neural network. This should be investigated, because if this is the case, allowances could be made for this in the geometric calculations. The second is that the neural network may have learned a function that involved significantly less multiplication of terms that contain error. As discussed in section 1.6 repeated multiplication leads to an error term that is proportional to the distance with a high degree. It is likely that this is not the method with the fewest instances of multiplication, or that there is a better way to implement this method that has been learned by the model. 
 
 ## Results by Position on Field
 
 Figure 2 shows that worst predictions were made in the top left and bottom right field sections. This may be due to the orientation  of the player in these areas, as if they are facing the opposite corner, then the predictions would be very bad due to extreme perception error. It should be noted that there are some extremely dark sections around each goal, that imply some predictions were made very well when looking at flags that are very close by. 
 
-The neural network prediction error observced in figure 3 seems to also be mostly focused around the outside of the field. Light strips can be observed on the top and bottom in models 2 through 4, with this effect being reduced in the lagged models 5 and 6  (this is likely where the improvement in lagged performance is coming from). These trends are not observable in model 7, as it appears at this scale to be highly accurate over the entire field. 
+The neural network prediction error observed in figure 3 seems to also be mostly focused around the outside of the field. Light strips can be observed on the top and bottom in models 2 through 4, with this effect being reduced in the lagged models 5 and 6  (this is likely where the improvement in lagged performance is coming from). These trends are not observable in model 7, as it appears at this scale to be highly accurate over the entire field. 
 
 Figure 4 shows the full range of predictions made by the geometric model and sheds light onto how it was possible for the accuracy to be so poor. The figure shows the that there  is a lot more variation in the positions predicted in the X direction than in the y direction. It is interesting to note the region in which there is no predicted agent locations in the bottom right hand corner. The cause for this should be investigated in further work. 
 
 Figure 5 shows a considerably more accurate set of predictions made by the neural networks, although there are still many predicted locations that are out of the range. Model 2 appears to be a skewed version of the field while model 3 shows  a corrected version with some added noise. Models 4 and 5 show an extremely spread out, scattered prediction set, that allows the effect of including the line to be seen clearly for the first time. The line creates much more uncertainty around the edges, causing some extreme predictions to be made. Model 6 and 7 are much more accurate, with model 7 even taking on an extremely similar shape to that of the true distribution of locations (seen in figures 2 and 3).
 
 ## Ablation Discussion
+
 The ablation study revealed that removing the variables related to line data decreased the accuracy of the resultant neural network. This means that this information is not helpful to the network when making predictions. It is possible that this is because the line distance and are not measured in the same way as with the flags; along with the fact that the lines do not provide any concrete information about coordinates (they convey information about a range of them). The angles and distances from the agent to each of the lines is measured as the distance to the point of intersection and their line of sight, likewise the angle is the acute angle formed by the line of sight and the line that is being observed. For any given pair of measurements, there is a range of possible locations that an agent could then be located in. This is likely what is causing the accuracy to go down. 
 
 The model that has been generated through the ablation study is the best model that has been created. It is for this reason that hyper parameter tuning will be conducted on this model. 
 
 
 ## Hyper-Parameter Tuning Discussion
-The hyper-parameters discussed were simulated in 30 groups, allowing for 30 different neural networks to be trained. The resultant minimum total MSE was 5.4. This resultant model had 4 hidden layers, with 275, 266, 120 and  240 nodes in each of the hidden layers. This represents a very significant improvement in the model that has been generated. The change of the structure of this neural network while maintaining the same inputs resulted in a drop of 122 in total MSE. 
-
-<!-- # Discussion -->
-<!-- ## Comparison to Baseline -->
-<!-- ## Comparison Across Projects -->
-<!-- Whether the accuracy in prediction was higher in self-localisation than on player location. It should be expected that the self-localisation performs better, as there is more data to go on, without as much movement to worry about.  -->
-
-<!-- ## Combined Results -->
-<!-- When the applications are stacked on top of each other, what will be the resultant compounded error? (this section should be relatively short as it would be expected that this is just an addition of errors multiplied by some scaling factor) -->
-
-<!-- ## Applications/What does this mean? -->
-<!-- Now that these predictions have been made, how can they contribute to the programming of the agents. How will this improve the play of a team -->
-
 
 ## Applications
 
-The neural network models have been trained to an extent at which the agent is able to predict their coordinate location with a high degree of accuracy. This means that there is an argument to put the model into production in an actual game. This would greatly improve on the geometric localisation that has been used previously, and allow for more advanced techniques to be implemented by the agents. As an example, the agents could perform complicated manoeuvres in which it is critical to know their exact location to receive a pass. This knowledge provides another advantage when shooting for goal, as knowledge as to exactly how far they are from the goal to adjust their kicking style or power applied. These advantages over other teams could be result in a higher probability of winning, especially when combined with additional optimisations mentioned in section (something discussion). This needs to be integrated tightly with the rest of the programming of each agent in order to take full advantage of the benefits. 
+The neural network models have been trained to an extent at which the agent is able to predict their coordinate location with a high degree of accuracy. This means that there is an argument to put the model into production in an actual game. This would greatly improve on the geometric localisation that has been used previously, and allow for more advanced techniques to be implemented by the agents. As an example, the agents could perform complicated manoeuvres in which it is critical to know their exact location to receive a pass. This knowledge provides another advantage when shooting for goal, as knowledge as to exactly how far they are from the goal to adjust their kicking style or power applied. These advantages over other teams could be result in a higher probability of winning, especially when combined with additional optimisations mentioned in section 5.2. This needs to be integrated tightly with the rest of the programming of each agent in order to take full advantage of the benefits. 
 
 One trade off that is worth considering is the accuracy to speed ratio. This should be as high as possible, as it is not beneficial to the agent to have a perfect prediction of their position if they have moved on from that location in the time the prediction takes. Explicit timing has not been conducted however, it is likely that neural networks with a higher number of nodes will take longer to train. This should be investigated further before putting the neural network in to production, as the geometric method is very fast as it only requires a relatively small number of multiplications. 
 
 
-# Future Work
+# Conclusions and Future Work
+
+## Conclusions
+
+The neural network models that have been trained show a much higher level of accuracy than that of the geometric model. The worst performing neural network that only included the 2 landmark inputs is much more accurate than the geometric model, however, would not be suitable in a production environment due to the error being relatively high. The final neural network that was created using hyper-parameter tuning would be very effective in a production environment, with a total MSE of 5 the agent’s in question would have a good idea of their location in almost every increment of time. 
 
 ## Improvements
 
@@ -363,8 +369,12 @@ There is the potential to rectify this problem by building into the program the 
 The data that the neural network is trained on has an inherent impact on the quality of predictions. It was noted in the discussion that the predictions in the X direction were more accurate than those in the Y direction, despite assumptions to the contrary. It was also noted that this may be caused by the fact that agents tend to look towards the opposing goal. This is a problem inherent to the programming of the agents and the data produced. A way to potentially improve the Y coordinate prediction is to either use more data to obtain more information about the Y coordinates  or to intentionally construct situations under simulation to obtain this information. 
 
 
-Other small changes that were not included due to wanting to limit the scope of this project include increasing the number of lagged variables included and ……………….
-
-
 ## Extensions
+
 Extending on this project it would be interesting to assess neural networks with different architectures. Specifically, recurrent neural networks (RNNs)  could be used, as they handle time delayed data well. 
+
+Neural networks are often treated as black box algorithms, as there are no direct coefficients that are applied to the input variables. It is therefore hard to assess the importance of each of the input variables in the generation of the final prediction that is being made. An extension on the work conducted on this project could involve assessing this importance information which could then be used to both understand how the neural network reaches its predictions, along with giving some insight into ways in which the model could be improved. It could also be used to illuminate any problematic bias that has been introduced through the training data.  A number of approaches to solve this have been developed, however, the lime (Local Interpretable Model-agnostic Explanations) framework developed by [@lime_evaluation] is designed to examine the behaviour of any model, through making small changes to the input variables and observing the changes in predictions that are output. This is ideal as it is not dependent on the architecture of the neural network and can even be used on the geometric model to compare.
+
+\newpage
+
+# References
